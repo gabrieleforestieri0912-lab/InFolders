@@ -1,0 +1,68 @@
+.infolders-chat-row {
+  position: relative;
+}
+
+.infolders-chat-row .infolders-bookmark-wrap {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-right: 6px;
+  direction: ltr !important;
+}
+
+.infolders-chat-row .infolders-bookmark-wrap {
+  opacity: 0.35;
+  pointer-events: auto;
+}
+
+.infolders-chat-row:hover .infolders-bookmark-wrap {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.infolders-bookmark-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  background: transparent;
+  cursor: pointer;
+  border: none;
+  color: rgba(255,255,255,0.7);
+  transition: all 0.2s ease;
+  direction: ltr !important;
+  border-radius: 4px;
+}
+
+.infolders-bookmark-btn:hover {
+  transform: scale(1.2);
+  color: #fbbf24;
+}
+
+.infolders-bookmark-btn svg {
+  filter: drop-shadow(0 0 4px currentColor);
+}
+
+.infolders-bookmark-btn:active {
+  transform: scale(0.9);
+}
+
+.infolders-folder-badge {
+  display: inline-flex !important;
+  align-items: center;
+  flex-shrink: 0;
+  line-height: 1.4;
+  pointer-events: none;
+  direction: ltr !important;
+}
+
+.infolders-chat-row:hover .infolders-folder-badge {
+  opacity: 0.6;
+}
+
+#infolders-inpage-buttons,
+#infolders-sidebar {
+  direction: ltr !important;
+  text-align: left !important;
+}

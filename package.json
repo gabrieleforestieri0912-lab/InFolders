@@ -1,23 +1,41 @@
 {
   "name": "infolders",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "bundle:extension": "node scripts/bundle-extension.js",
+    "verify": "npm run bundle:extension && node scripts/verify-extension.js",
+    "build:extension": "node build-extension.js",
+    "pack": "npm run build:extension"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.108.1",
+    "lucide": "^1.14.0",
     "next": "16.2.3",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "resend": "^6.12.4",
+    "stripe": "^22.2.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/chrome": "^0.1.43",
+    "@types/node": "^25.9.2",
+    "@types/react": "^19.2.17",
+    "adm-zip": "^0.5.17",
+    "autoprefixer": "^10.5.0",
     "babel-plugin-react-compiler": "1.0.0",
+    "esbuild": "^0.25.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.3",
-    "tailwindcss": "^4"
+    "postcss": "^8.5.14",
+    "sharp": "^0.34.0",
+    "tailwindcss": "^4.2.4",
+    "typescript": "^6.0.3"
   }
 }
