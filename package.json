@@ -7,11 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit",
-    "bundle:extension": "node scripts/bundle-extension.js",
-    "verify": "npm run bundle:extension && node scripts/verify-extension.js",
-    "build:extension": "node build-extension.js",
-    "pack": "npm run build:extension"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.1",
@@ -24,17 +20,13 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/chrome": "^0.1.43",
     "@types/node": "^25.9.2",
     "@types/react": "^19.2.17",
-    "adm-zip": "^0.5.17",
     "autoprefixer": "^10.5.0",
     "babel-plugin-react-compiler": "1.0.0",
-    "esbuild": "^0.25.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.3",
     "postcss": "^8.5.14",
-    "sharp": "^0.34.0",
     "tailwindcss": "^4.2.4",
     "typescript": "^6.0.3"
   }

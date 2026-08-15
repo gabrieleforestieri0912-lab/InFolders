@@ -1,8 +1,7 @@
 module.exports = {
   content: [
-    './content.js',
-    './subscriptions.html',
-    './popup.html',
+    './src/**/*.{ts,tsx}',
+    './extension/static/*.html',
   ],
   theme: {
     extend: {

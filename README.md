@@ -1,36 +1,29 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# InFolders
 
-## Getting Started
+Estensione Chrome (Manifest V3) che organizza le chat dei bot AI (ChatGPT, Gemini, Claude, Perplexity) in cartelle annidate, bookmark, libreria prompt e profili di istruzioni. Include un sito Next.js (landing, privacy, piani premium).
 
-First, run the development server:
+## Struttura
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```
+extension/    Estensione Chrome pronta da caricare (manifest, icone, asset statici)
+  static/       Bundle JS, HTML e CSS (background, content, popup, subscriptions)
+  icons/        Icone PNG (16, 48, 128)
+src/          Sorgenti TypeScript del sito Next.js
+  app/          Pagine e API routes
+  lib/          Libreria condivisa (piani, email)
+types/        Dichiarazioni TypeScript globali
+store/        Note per la pubblicazione sullo store
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Script
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+| Comando | Descrizione |
+|---|---|
+| `npm run dev` | Avvia il sito Next.js in sviluppo |
+| `npm run build` | Build del sito Next.js |
+| `npm run lint` | ESLint |
+| `npm run typecheck` | Controllo dei tipi TypeScript |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Caricare l'estensione in Chrome
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+In `chrome://extensions` abilita "Modalità sviluppatore" e scegli **Carica estensione non pacchettizzata** puntando alla cartella `extension/`.

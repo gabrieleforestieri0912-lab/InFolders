@@ -17,7 +17,7 @@
     ]
   },
   "action": {
-    "default_popup": "subscriptions.html",
+    "default_popup": "static/subscriptions.html",
     "default_title": "InFolders Premium",
     "default_icon": {
       "16": "icons/icon-16.png",
@@ -31,7 +31,7 @@
     "128": "icons/icon-128.png"
   },
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "static/background.js"
   },
   "content_scripts": [
     {
@@ -43,8 +43,8 @@
         "*://perplexity.ai/*",
         "*://www.perplexity.ai/*"
       ],
-      "js": ["content.js"],
-      "css": ["content.css"],
+      "js": ["static/content.js"],
+      "css": ["static/content.css"],
       "run_at": "document_idle"
     }
   ]

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.0 — in sviluppo
+
+- Riorganizzazione: asset statici dell'estensione in `extension/static`, manifest in `extension/manifest.json`, icone in `extension/icons`; rimossi file morti (`temp-content-app.ts`, `input.css`) e bundle obsoleti dalla root.
+- Estensione senza pipeline di build: rimossi `scripts/`, `tests/`, `vitest.config.mts` e l'output `dist/`. La cartella `extension/` è l'unica fonte da caricare in `chrome://extensions` (i bundle `background.js`, `content.js`, `popup.js` sono inclusi in `extension/static/`).
+- Rimossi i sorgenti TypeScript dell'estensione (`src/extension/`) e i file di libreria usati solo da questi (`src/lib/types.ts`, `supabase.ts`, `data-service.ts`); rimosse le dichiarazioni Chrome/Lucide non più usate e la dipendenza `@types/chrome`.
+
 ## 1.1.0 — 2026-05-04
 
 - Estensione: sorgenti modulari in `src/extension/` con bundle esbuild verso `content.js`, `popup.js`, `subscriptions.js`.

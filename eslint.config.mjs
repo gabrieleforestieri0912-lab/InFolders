@@ -10,6 +10,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Bundle dell'estensione (file generati, non formattati by hand)
+    "extension/static/background.js",
+    "extension/static/content.js",
+    "extension/static/popup.js",
   ]),
 ]);
 

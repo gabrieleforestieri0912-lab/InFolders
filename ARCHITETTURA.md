@@ -11,47 +11,33 @@
 ```
 infolders/
 ├── src/
-│   ├── app/                          # Sito Next.js (landing + privacy)
+│   ├── app/                          # Sito Next.js (landing, privacy, piani, API routes)
 │   │   ├── layout.tsx
 │   │   ├── page.tsx
-│   │   └── privacy/page.tsx
-│   ├── extension/                    # Sorgente TypeScript dell'estensione
-│   │   ├── background.ts             # Service worker (message broker, OAuth, cache)
-│   │   ├── content-app.ts            # Sidebar iniettata, bookmark, UI principale
-│   │   ├── popup-app.ts              # Popup estensione (auth, cartelle, backup)
-│   │   ├── subscriptions-app.ts      # Pagina piani premium
-│   │   ├── entries/                  # Entry point per esbuild
-│   │   │   ├── content-entry.ts
-│   │   │   ├── popup-entry.ts
-│   │   │   └── subscriptions-entry.ts
-│   │   └── lib/
-│   │       ├── i18n.ts               # Sistema di internazionalizzazione (it/en)
-│   │       ├── plans.ts              # Logica piani premium e limiti
-│   │       └── platform-config.ts    # Configurazione tema per piattaforma
-│   └── lib/                          # Libreria condivisa
-│       ├── types.ts                  # Tutti i tipi TypeScript
-│       ├── supabase.ts               # Client Supabase + helper auth
-│       └── data-service.ts           # Operazioni CRUD su Supabase
-├── manifest.json                     # Manifest V3 dell'estensione
-├── build-extension.js                # Orchestratore build estensione
-├── scripts/
-│   ├── bundle-extension.js           # Bundler esbuild (4 entry point → IIFE)
-│   ├── generate-icons.js             # Generatore icone
-│   └── verify-extension.js           # Validazione sintassi JS bundle
-├── dist/
-│   ├── packed/                       # Cartella per "Carica estensione non pacchettizzata"
-│   └── infolders-extension.zip       # Pacchetto per Chrome Web Store
-└── types/                            # Dichiarazioni TypeScript globali
-    ├── chrome.d.ts
-    ├── css.d.ts
-    └── lucide.d.ts
+│   │   ├── privacy/page.tsx
+│   │   └── api/                      # Webhook, checkout, contatto, feedback
+│   └── lib/                          # Libreria condivisa del sito
+│       ├── plans-config.ts           # Config piani per il sito web
+│       └── resend.ts                 # Invio email (Resend)
+├── extension/                        # Estensione pronta da caricare in Chrome
+│   ├── manifest.json                 # Manifest V3 dell'estensione
+│   ├── static/                       # Asset statici inclusi nel pacchetto
+│   │   ├── background.js / content.js / popup.js  # Bundle (file generati)
+│   │   ├── popup.html / popup.css
+│   │   ├── subscriptions.html / subscriptions.css / subscriptions.js
+│   │   ├── privacy.html
+│   │   ├── content.css
+│   │   └── lucide-icons.js           # Libreria icone globale (HTML pages)
+│   └── icons/                        # Icone PNG (16, 48, 128)
+└── types/                             # Dichiarazioni TypeScript globali
+    └── css.d.ts
 ```
 
 ---
 
 ## Architettura
 
-### Service Worker (`background.ts`)
+### Service Worker (`extension/static/background.js`)
 
 Cache in memoria dei dati utente. Gestisce 7 azioni via `chrome.runtime.onMessage`:
 
@@ -65,7 +51,7 @@ Cache in memoria dei dati utente. Gestisce 7 azioni via `chrome.runtime.onMessag
 | `loginWithGoogle` | Flusso OAuth2 completo via `chrome.identity.launchWebAuthFlow` |
 | `logout` | Pulisce token e dati utente |
 
-### Content Script (`content-app.ts`)
+### Content Script (`extension/static/content.js`)
 
 Il cuore dell'estensione. A ogni caricamento pagina su un sito supportato:
 
@@ -117,21 +103,17 @@ Il pagamento è simulato con un timeout di 2 secondi. I dati premium sono salvat
 ## Build
 
 ```bash
-npm run build          # Build sito Next.js
-npm run build:extension  # Build completa estensione (icone → bundle → zip)
-npm run verify         # Bundle + validazione sintassi
+npm run build        # Build sito Next.js
+npm run lint         # ESLint
+npm run typecheck    # Controllo dei tipi TypeScript
 ```
 
-La build estensione (esbuild) produce 4 file JS in formato IIFE:
-- `background.js` — Service worker
-- `content.js` — Content script
-- `popup.js` — Popup
-- `subscriptions.js` — Pagina piani
+L'estensione non ha pipeline di build: la cartella `extension/` è già pronta per "Carica estensione non pacchettizzata" in `chrome://extensions`. I file JS in `extension/static/` (`background.js`, `content.js`, `popup.js`) sono bundle generati: non esistono più sorgenti TypeScript dell'estensione nel repo, le modifiche vanno fatte direttamente su questi file.
 
 ---
 
 ## Dipendenze principali
 
 - **Runtime**: Next.js 16, React 19, Supabase JS, Lucide icone
-- **Build**: esbuild, adm-zip, sharp, Tailwind CSS v4
+- **Build sito**: Tailwind CSS v4
 - **Estensione**: Chrome API (storage, identity, tabs, runtime)
