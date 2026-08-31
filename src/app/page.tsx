@@ -6,7 +6,6 @@ import FaqAccordion from './FaqAccordion';
 import Footer from './Footer';
 import Header from './Header';
 import ChatMockup from './ChatMockup';
-import ExtensionDemo from './ExtensionDemo';
 import { PLATFORM_ICONS } from './PlatformIcons';
 
 
@@ -58,7 +57,7 @@ export default function Home() {
 
 
       {/* Hero */}
-      <section className="mx-auto max-w-6xl px-6 pt-10 pb-16 text-center sm:pt-14 sm:pb-20">
+      <section className="mx-auto max-w-6xl px-6 pt-28 pb-16 text-center sm:pt-36 sm:pb-20">
 
         {/* Multi-color pill badge */}
         <div
@@ -126,8 +125,6 @@ export default function Home() {
 
         <ChatMockup />
       </section>
-
-      <ExtensionDemo />
 
       {/* Platforms */}
       <section className="border-y border-white/5 py-12">

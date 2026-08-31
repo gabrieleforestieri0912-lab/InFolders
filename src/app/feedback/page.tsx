@@ -56,7 +56,7 @@ export default function FeedbackPage() {
       <Header />
 
       {/* Hero */}
-      <section className="border-b border-white/5 py-14">
+      <section className="border-b border-white/5 pt-28 pb-14">
         <div className="mx-auto max-w-2xl px-6 text-center">
           <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-[#a855f7]">Feedback</p>
           <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Aiutaci a migliorare</h1>
