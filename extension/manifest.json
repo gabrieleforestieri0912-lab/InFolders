@@ -1,17 +1,28 @@
 {
   "manifest_version": 3,
   "name": "InFolders",
-  "version": "1.1.0",
+  "version": "1.2.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAkZdMNca8mWYhHNjiIZl7pmzPR/AGSM+073ZQrOzFF4l7vQhkRYI8UGgVuW/ccxiDxTp3Wt9D+Iatwv20/rHgHSAaOabx2+bF4GNRyVWHeJZGUCny04Sln+znIwvsfbMSrGQgrVXWdfN4qlOseHYAiTlqsLJUoI4vivCMqS00KWHA5AJvOSqw+6zj0cD74wVpvFLcIDDyJdZr2pvlYFLI1S0Asw8YtAVhc9oDLQ6gglg4tuvfuTHIlk+GxuL5S6uC2KSK8kk5VKKg6WVuCS0ROHzvnfNCvJM0ESz36qTmgUk4x0VofEmItrnp10S7546JHqzi+lf8UhuHmg+F6Fx3bQIDAQAB",
   "description": "Organizza e potenzia le tue conversazioni AI. Cartelle illimitate, libreria prompt, profili istruzioni personalizzati, bookmark, ricerca avanzata e sincronizzazione multi-dispositivo per ChatGPT, Gemini, Claude e Perplexity.",
   "permissions": ["storage", "identity", "tabs", "activeTab"],
   "host_permissions": [
     "https://www.googleapis.com/*",
     "https://*.supabase.co/*",
-    "https://*.supabase.in/*"
+    "https://chat.openai.com/*",
+    "https://chatgpt.com/*",
+    "https://www.chatgpt.com/*",
+    "https://gemini.google.com/*",
+    "https://gemini.com/*",
+    "https://www.gemini.com/*",
+    "https://claude.ai/*",
+    "https://www.claude.ai/*",
+    "https://perplexity.ai/*",
+    "https://www.perplexity.ai/*"
   ],
   "oauth2": {
     "client_id": "334680780991-m1gmnumkekipbm7c734e0pin75kbano2.apps.googleusercontent.com",
     "scopes": [
+      "openid",
       "https://www.googleapis.com/auth/userinfo.email",
       "https://www.googleapis.com/auth/userinfo.profile"
     ]
@@ -38,8 +49,12 @@
       "matches": [
         "*://chat.openai.com/*",
         "*://chatgpt.com/*",
+        "*://www.chatgpt.com/*",
         "*://gemini.google.com/*",
+        "*://gemini.com/*",
+        "*://www.gemini.com/*",
         "*://claude.ai/*",
+        "*://www.claude.ai/*",
         "*://perplexity.ai/*",
         "*://www.perplexity.ai/*"
       ],

@@ -48,9 +48,9 @@ export const PLANS: Plan[] = [
   {
     id: 'pro',
     name: 'Pro',
-    tagline: 'Pagamento unico',
+    tagline: 'Abbonamento mensile',
     price: '€9,99',
-    priceNote: 'una tantum / vita',
+    priceNote: 'mese',
     badge: 'Più popolare',
     features: [
       { label: 'Chat illimitate nelle cartelle', included: true },
@@ -63,8 +63,8 @@ export const PLANS: Plan[] = [
       { label: 'Profili Istruzioni personalizzati', included: true },
       { label: 'Supporto prioritario', included: false },
     ],
-    ctaLabel: 'Acquista Pro — €9,99',
-    ctaHref: '/premium/success',
+    ctaLabel: 'Installa e attiva Pro',
+    ctaHref: 'https://chromewebstore.google.com',
     highlighted: true,
   },
   {
@@ -72,7 +72,7 @@ export const PLANS: Plan[] = [
     name: 'Team',
     tagline: 'Per team e aziende',
     price: '€29,99',
-    priceNote: 'per utente / anno',
+    priceNote: 'mese',
     features: [
       { label: 'Chat illimitate nelle cartelle', included: true },
       { label: 'Cartelle e sottocartelle illimitate', included: true },

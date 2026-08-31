@@ -5,6 +5,8 @@ import FeatureCards from './FeatureCards';
 import FaqAccordion from './FaqAccordion';
 import Footer from './Footer';
 import Header from './Header';
+import ChatMockup from './ChatMockup';
+import ExtensionDemo from './ExtensionDemo';
 import { PLATFORM_ICONS } from './PlatformIcons';
 
 
@@ -122,55 +124,10 @@ export default function Home() {
           </a>
         </div>
 
-        {/* Mockup */}
-        <div className="mt-16 mx-auto max-w-4xl rounded-2xl border border-white/10 bg-gradient-to-b from-[#1a0a2e] to-[#09000d] p-2 shadow-2xl">
-          <div className="rounded-xl border border-white/5 bg-[#0d0015] p-4 sm:p-6">
-            <div className="flex gap-3">
-              <div className="hidden w-64 shrink-0 flex-col gap-2 rounded-lg border border-white/5 bg-[#12001e] p-3 sm:flex">
-                <div className="h-2 w-3/4 rounded-full bg-[#a855f7]/30" />
-                <div className="h-2 w-1/2 rounded-full bg-white/10" />
-                <div className="mt-4 space-y-2">
-                  {[
-                    { label: 'Lavoro', color: '#a855f7' },
-                    { label: 'Gemini Tasks', color: '#60a5fa' },
-                    { label: 'Claude Dev', color: '#fb923c' },
-                    { label: 'Personale', color: '#06b6d4' },
-                  ].map(({ label, color }) => (
-                    <div key={label} className="flex items-center gap-2 rounded-md bg-white/5 px-3 py-2 text-xs text-zinc-400">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                      </svg>
-                      {label}
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="flex-1 rounded-lg border border-white/5 bg-[#0a0012] p-4 sm:p-6">
-                <div className="mb-4 flex items-center gap-2">
-                  <div className="h-3 w-3 rounded-full bg-green-500" />
-                  <div className="h-3 w-3 rounded-full bg-yellow-500" />
-                  <div className="h-3 w-3 rounded-full bg-red-500" />
-                  <div className="ml-4 h-3 w-32 rounded-full bg-white/10" />
-                </div>
-                <div className="space-y-3">
-                  <div className="h-16 rounded-lg bg-gradient-to-r from-[#a855f7]/15 to-transparent p-3 border border-[#a855f7]/10">
-                    <div className="mb-2 h-2 w-24 rounded-full bg-white/20" />
-                    <div className="h-2 w-full rounded-full bg-white/10" />
-                  </div>
-                  <div className="h-16 rounded-lg bg-gradient-to-r from-[#60a5fa]/15 to-transparent p-3 border border-[#60a5fa]/10">
-                    <div className="mb-2 h-2 w-20 rounded-full bg-white/20" />
-                    <div className="h-2 w-3/4 rounded-full bg-white/10" />
-                  </div>
-                  <div className="h-16 rounded-lg bg-gradient-to-r from-[#fb923c]/15 to-transparent p-3 border border-[#fb923c]/10">
-                    <div className="mb-2 h-2 w-28 rounded-full bg-white/20" />
-                    <div className="h-2 w-full rounded-full bg-white/10" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ChatMockup />
       </section>
+
+      <ExtensionDemo />
 
       {/* Platforms */}
       <section className="border-y border-white/5 py-12">
@@ -321,7 +278,7 @@ export default function Home() {
           <div className="mx-auto mb-16 max-w-2xl text-center">
             <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Scegli il tuo piano</h2>
             <p className="mt-4 text-zinc-400">
-              Inizia gratis, passa al Pro quando sei pronto. Un unico pagamento, niente abbonamenti ricorrenti.
+              Inizia gratis, passa al Pro quando sei pronto. Abbonamento mensile, disdici quando vuoi.
             </p>
           </div>
 
@@ -379,7 +336,7 @@ export default function Home() {
           </div>
 
           <p className="mt-10 text-center text-xs text-zinc-600">
-            Pagamento sicuro tramite Stripe. Nessun dato di pagamento viene salvato sui nostri server.
+            Pro e Team si acquistano dall&apos;estensione: installala, accedi con Google e scegli il piano dalla sidebar. Pagamento sicuro tramite Stripe.
           </p>
         </div>
       </section>

@@ -13,7 +13,7 @@ const faqs = [
   },
   {
     q: 'InFolders è gratuito?',
-    a: 'InFolders offre un piano Free con 50 chat nelle cartelle, bookmark illimitati e tutte le funzionalità base. Il piano Pro (€9,99 una tantum) sblocca chat illimitate, sincronizzazione cloud, libreria prompt e profili istruzioni. Il piano Team include supporto prioritario.',
+    a: 'InFolders offre un piano Free con 50 chat nelle cartelle, bookmark illimitati e tutte le funzionalità base. Il piano Pro (€9,99/mese) sblocca chat illimitate, sincronizzazione cloud, libreria prompt e profili istruzioni. Il piano Team (€29,99/mese) include tutte le funzionalità Pro più strumenti di condivisione per il team.',
   },
   {
     q: 'Quali piattaforme AI supporta?',
@@ -21,11 +21,11 @@ const faqs = [
   },
   {
     q: 'I miei dati sono al sicuro?',
-    a: 'Assolutamente. I tuoi dati restano sul tuo dispositivo tramite le API di storage del browser. La sincronizzazione opzionale su cloud usa Supabase con crittografia e autenticazione Google OAuth 2.0.',
+    a: 'Assolutamente. Cartelle e bookmark restano sul tuo dispositivo tramite le API di storage del browser. La sincronizzazione su cloud (riservata al piano Pro) usa Supabase con connessione HTTPS e autenticazione Google OAuth 2.0; i prompt e i profili restano sempre sul dispositivo.',
   },
   {
-    q: 'Il piano Pro ha costi ricorrenti?',
-    a: 'No. Il piano Pro si sblocca con un unico pagamento di €9,99 una tantum tramite Stripe. Niente abbonamenti, niente costi ricorrenti. Paghi una volta e le funzionalità Pro sono tue per sempre.',
+    q: 'Il piano Pro è un abbonamento mensile?',
+    a: 'Sì. Il piano Pro costa €9,99 al mese tramite Stripe e puoi disdire quando vuoi. Il piano Team costa €29,99 al mese.',
   },
 ];
 

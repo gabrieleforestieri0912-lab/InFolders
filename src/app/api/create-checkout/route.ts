@@ -13,8 +13,8 @@ export async function POST(req: Request) {
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
 
     const plans: Record<string, { name: string; amount: number }> = {
-      pro: { name: 'InFolders Pro', amount: 299 },
-      team: { name: 'InFolders Team', amount: 999 },
+      pro: { name: 'InFolders Pro', amount: 999 },
+      team: { name: 'InFolders Team', amount: 2999 },
     };
     const selected = plans[plan];
     if (!selected) {
@@ -22,12 +22,13 @@ export async function POST(req: Request) {
     }
 
     const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
+      mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [{
         price_data: {
           currency: 'eur',
-          product_data: { name: selected.name, description: `Piano ${plan === 'pro' ? 'Pro' : 'Team'} — pagamento una tantum` },
+          recurring: { interval: 'month' },
+          product_data: { name: selected.name, description: `Piano ${plan === 'pro' ? 'Pro' : 'Team'} — abbonamento mensile` },
           unit_amount: selected.amount,
         },
         quantity: 1,

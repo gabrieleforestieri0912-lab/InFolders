@@ -71,9 +71,9 @@ const sections: Section[] = [
     steps: [
       { n: 1, title: 'Apri il Chrome Web Store', desc: 'Vai su chromewebstore.google.com e cerca "InFolders" oppure clicca il link diretto dalla homepage.' },
       { n: 2, title: 'Clicca "Aggiungi a Chrome"', desc: 'Conferma i permessi richiesti (lettura della pagina corrente) e attendi l\'installazione automatica.' },
-      { n: 3, title: 'Apri un chatbot supportato', desc: 'Naviga su ChatGPT, Gemini, Claude o Perplexity. La sidebar di InFolders apparirà automaticamente sul lato della pagina.' },
+      { n: 3, title: 'Apri un chatbot supportato', desc: 'Naviga su ChatGPT, Gemini, Claude o Perplexity. Sul lato della pagina compariranno i pulsanti fluttuanti di InFolders: clicca quello della sidebar per aprirla.' },
     ],
-    tip: 'Non vedi la sidebar? Clicca sull\'icona InFolders nella barra delle estensioni di Chrome per attivarla/disattivarla.',
+    tip: 'Non vedi i pulsanti fluttuanti? Ricarica la pagina con F5. L\'icona InFolders nella barra delle estensioni apre il popup dei piani Premium.',
   },
   {
     id: 'folders',
@@ -109,7 +109,7 @@ const sections: Section[] = [
     title: 'Ricerca Globale',
     subtitle: 'Trova qualsiasi chat in tutti i tuoi folder istantaneamente',
     steps: [
-      { n: 1, title: 'Apri la ricerca', desc: 'Clicca l\'icona di ricerca 🔍 in cima alla sidebar, oppure usa la scorciatoia da tastiera (Ctrl+K su Windows).' },
+      { n: 1, title: 'Apri la ricerca', desc: 'Clicca l\'icona di ricerca 🔍 in cima alla sidebar e digita il termine da trovare.' },
       { n: 2, title: 'Digita il termine', desc: 'La ricerca filtra in tempo reale tutte le conversazioni (nelle cartelle, nei bookmark e nell\'elenco generale) per titolo.' },
       { n: 3, title: 'Apri il risultato', desc: 'Clicca il risultato desiderato per aprire direttamente quella conversazione nel chatbot.' },
     ],
@@ -127,7 +127,7 @@ const sections: Section[] = [
       { n: 3, title: 'Usa un prompt', desc: 'Clicca su qualsiasi prompt salvato: viene copiato automaticamente negli appunti. Incollalo nella chat con Ctrl+V.' },
       { n: 4, title: 'Organizza i prompt', desc: 'Trascina i prompt per riordinarli. Clicca i tre puntini ⋯ per modificarli o eliminarli.' },
     ],
-    tip: 'La libreria prompt è disponibile nel piano Pro. Con il piano Free puoi visualizzare ma non creare nuovi prompt.',
+    tip: 'La libreria prompt è disponibile nel piano Pro: con il piano Free puoi visualizzare e copiare i prompt già salvati ma non crearne di nuovi. I prompt vengono salvati localmente nel browser (non fanno parte della sincronizzazione cloud).',
   },
   {
     id: 'profiles',
@@ -136,12 +136,12 @@ const sections: Section[] = [
     title: 'Profili Istruzioni',
     subtitle: 'Personalità e istruzioni custom per ogni contesto (Piano Pro)',
     steps: [
-      { n: 1, title: 'Accedi ai profili', desc: 'Clicca la scheda "Profili" nella sidebar (disponibile su ChatGPT). Troverai i profili predefiniti (Creativo, Tecnico, Consulente).' },
+      { n: 1, title: 'Accedi ai profili', desc: 'Clicca la scheda "Profili" nella sidebar. Troverai i profili predefiniti (Sviluppatore, Marketing, Consulente).' },
       { n: 2, title: 'Crea un profilo custom', desc: 'Clicca "+ Nuovo profilo", scegli un nome e un colore identificativo, poi scrivi le istruzioni personalizzate per il modello.' },
-      { n: 3, title: 'Attiva un profilo', desc: 'Clicca "Attiva" sul profilo desiderato: le istruzioni vengono automaticamente iniettate nelle impostazioni di ChatGPT come istruzioni personalizzate.' },
-      { n: 4, title: 'Cambia profilo al volo', desc: 'Puoi passare da un profilo all\'altro in qualsiasi momento senza riaprire le impostazioni di ChatGPT.' },
+      { n: 3, title: 'Attiva un profilo', desc: 'Clicca "Attiva" sul profilo desiderato: il profilo attivo viene salvato sul dispositivo e resta selezionato finché non lo disattivi.' },
+      { n: 4, title: 'Cambia profilo al volo', desc: 'Puoi passare da un profilo all\'altro in qualsiasi momento.' },
     ],
-    tip: 'I profili istruzioni funzionano attualmente solo su ChatGPT. Il supporto ad altri modelli è in arrivo.',
+    tip: 'La creazione di profili personalizzati richiede il piano Pro; i profili predefiniti restano disponibili su tutti i piani. Le istruzioni vengono salvate sul dispositivo e l\'iniezione automatica nelle impostazioni di ChatGPT è in sviluppo.',
   },
 ];
 
@@ -328,10 +328,9 @@ export default function GuidePage() {
                   { feat: 'Bookmark', free: '✓ Illimitati', pro: '✓ Illimitati', team: '✓ Illimitati' },
                   { feat: 'Ricerca globale', free: '✓', pro: '✓', team: '✓' },
                   { feat: 'Drag & Drop', free: '✓', pro: '✓', team: '✓' },
-                  { feat: 'Libreria Prompt', free: '—', pro: '✓', team: '✓' },
-                  { feat: 'Profili Istruzioni', free: '—', pro: '✓', team: '✓' },
-                  { feat: 'Sync multi-dispositivo', free: '—', pro: '✓', team: '✓' },
-                  { feat: 'Multi-account', free: '—', pro: '✓', team: '✓' },
+                  { feat: 'Libreria Prompt (locale)', free: '—', pro: '✓', team: '✓' },
+                  { feat: 'Profili Istruzioni (locale)', free: '—', pro: '✓', team: '✓' },
+                  { feat: 'Sync cloud (bidirezionale)', free: '—', pro: '✓', team: '✓' },
                   { feat: 'Supporto prioritario', free: '—', pro: '—', team: '✓' },
                 ].map((row) => (
                   <tr key={row.feat} className="transition-colors hover:bg-white/[0.02]">
@@ -369,7 +368,7 @@ export default function GuidePage() {
               },
               {
                 q: 'Le cartelle non si sincronizzano su un altro dispositivo',
-                a: "La sincronizzazione cloud richiede il piano Pro e che tu abbia effettuato l'accesso con lo stesso account Google su entrambi i dispositivi. Verifica il login nella sezione account della sidebar.",
+                a: "La sincronizzazione cloud richiede il piano Pro e l'accesso con lo stesso account Google. Al login e a ogni modifica l'estensione confronta i dati locali con quelli nel cloud e li unisce (vince la modifica più recente, le eliminazioni vengono propagate). Assicurati di essere loggato con lo stesso account, di avere il piano Pro attivo e di aver lasciato la pagina aperta qualche secondo dopo il login: il sync avviene automaticamente.",
               },
               {
                 q: 'Il pulsante bookmark non è visibile',
@@ -377,11 +376,11 @@ export default function GuidePage() {
               },
               {
                 q: 'Ho perso le mie cartelle dopo un aggiornamento',
-                a: "I dati sono salvati nel localStorage del browser. Potresti averli persi se hai cancellato i dati del sito. Con il piano Pro e la sync cloud abilitata, le cartelle vengono ripristinate automaticamente.",
+                a: "Cartelle e bookmark sono salvati nello storage locale del browser (chrome.storage.local); prompt e profili nel localStorage del sito. Potresti averli persi se hai cancellato i dati del browser o disinstallato l'estensione. Con il piano Pro e l'accesso allo stesso account Google, al primo login su un nuovo dispositivo i dati vengono ripristinati dal cloud in automatico (merge con risoluzione dei conflitti per timestamp).",
               },
               {
                 q: 'I profili istruzioni non si attivano',
-                a: "I profili istruzioni sono supportati solo su ChatGPT e richiedono il piano Pro. Assicurati di essere loggato su ChatGPT e che le istruzioni personalizzate siano abilitate nelle impostazioni di ChatGPT.",
+                a: "La creazione di profili personalizzati richiede il piano Pro; i profili predefiniti sono disponibili su tutti i piani. I profili vengono salvati sul dispositivo: l'attivazione imposta quello attivo nella sidebar e l'iniezione automatica delle istruzioni nelle impostazioni di ChatGPT è in sviluppo.",
               },
             ].map((item, i) => (
               <details key={i} className="group rounded-xl border border-white/5 bg-white/[0.02] transition-all open:border-[#a855f7]/20 open:bg-[#a855f7]/[0.02]">

@@ -13,7 +13,7 @@
 </head>
 <body>
   <h1>InFolders - Informativa sulla privacy</h1>
-  <p><strong>Ultimo aggiornamento:</strong> 4 maggio 2026</p>
+  <p><strong>Ultimo aggiornamento:</strong> 21 agosto 2026</p>
 
   <p>InFolders è un'estensione del browser che ti aiuta a organizzare le conversazioni con servizi di chat AI (ad es. ChatGPT, Gemini, Claude, Perplexity). Questa pagina descrive quali dati vengono trattati e perché.</p>
 
@@ -21,24 +21,31 @@
   <p>Il titolare è l'editore dell'estensione (inserisci ragione sociale / email di contatto prima della pubblicazione sullo store). Per richieste privacy: <a href="mailto:privacy@infolders.app">privacy@infolders.app</a> (aggiorna con un indirizzo reale).</p>
 
   <h2>Dati memorizzati sul dispositivo</h2>
-  <p>Tramite <code>chrome.storage.local</code> l'estensione può salvare: struttura delle cartelle e riferimenti alle chat, bookmark, preferenze di abbonamento di prova, e identificativo account Google (id, email, nome, foto) dopo l'accesso. I dati restano sul dispositivo salvo funzioni future esplicitamente dichiarate (es. sync cloud).</p>
+  <p>Tramite <code>chrome.storage.local</code> l'estensione può salvare: struttura delle cartelle e riferimenti alle chat, bookmark, stato del piano (Free/Pro/Team), dati del profilo Google (id, email, nome, foto) e la sessione di autenticazione usata per la sincronizzazione cloud. I prompt e i profili istruzioni vengono salvati nel <code>localStorage</code> del sito su cui usi l'estensione.</p>
 
   <h2>Accesso con Google</h2>
-  <p>Se scegli "Accedi con Google", viene usato il flusso OAuth di Google per ottenere un token di accesso temporaneo e leggere i campi del profilo base (email, nome). Il token non viene conservato in storage: viene usato solo per la chiamata a <code>userinfo</code> e poi scartato.</p>
+  <p>Se scegli "Accedi con Google", viene usato il flusso OAuth di Google (<code>chrome.identity.launchWebAuthFlow</code>) per ottenere un ID token temporaneo da cui vengono letti i campi base del profilo (email, nome). L'ID token di Google non viene salvato; la sessione generata con il servizio di sincronizzazione (token di accesso e refresh) viene conservata in <code>chrome.storage.local</code> per mantenerti autenticato e viene rimossa al logout.</p>
+
+  <h2>Sincronizzazione cloud (Supabase)</h2>
+  <p>Solo gli utenti con un piano a pagamento (Pro/Team) sincronizzano i dati sul cloud. Vengono sincronizzati: struttura delle cartelle, bookmark e stato del piano, su connessione HTTPS, associati al tuo account. Gli utenti del piano Free non caricano dati sul cloud. La sincronizzazione è bidirezionale: al login e a ogni modifica le cartelle e i bookmark vengono confrontati con quelli nel cloud e uniti con risoluzione dei conflitti basata sulla modifica più recente (timestamp); le eliminazioni vengono propagate tra i dispositivi tramite marcatori temporanei. Un dispositivo rimasto offline a lungo riprende il sync al primo accesso.</p>
+
+  <h2>Pagamenti</h2>
+  <p>I piani a pagamento sono abbonamenti mensili elaborati tramite Stripe. InFolders non raccoglie né memorizza i dati della tua carta di credito: il pagamento avviene interamente sulla piattaforma Stripe.</p>
 
   <h2>Permessi del browser</h2>
   <ul>
-    <li><strong>storage</strong> - salvare cartelle e impostazioni in locale.</li>
+    <li><strong>storage</strong> - salvare cartelle, bookmark, profilo e impostazioni in locale.</li>
     <li><strong>identity</strong> - login Google tramite API Identity dell'estensione.</li>
     <li><strong>tabs / activeTab</strong> - aprire link delle chat e interagire con la scheda attiva quando usi le funzioni dell'estensione.</li>
-    <li><strong>host (Google APIs)</strong> - recuperare il profilo utente dopo il login.</li>
+    <li><strong>host (chat AI)</strong> - iniettare la sidebar e i pulsanti InFolders su ChatGPT, Gemini, Claude e Perplexity.</li>
+    <li><strong>host (Google / Supabase)</strong> - login Google e sincronizzazione cloud per gli utenti Pro/Team.</li>
   </ul>
 
   <h2>Content script</h2>
-  <p>Su siti di terze parti (fornitori di chat) viene iniettata un'interfaccia (sidebar, pulsanti). L'estensione non invia il contenuto delle conversazioni ai server dell'editore se non integrazioni future documentate separatamente.</p>
+  <p>Su siti di terze parti (fornitori di chat) viene iniettata un'interfaccia (sidebar, pulsanti). L'estensione non legge né invia il contenuto delle conversazioni: salva solo il collegamento e il titolo delle chat che decidi di organizzare.</p>
 
   <h2>I tuoi diritti</h2>
-  <p>Puoi revocare l'accesso Google dalle impostazioni del tuo account Google, cancellare i dati dall'estensione (funzione "Cancella tutto" / rimozione dati browser) e disinstallare l'estensione in qualsiasi momento.</p>
+  <p>Puoi revocare l'accesso Google dalle impostazioni del tuo account Google, disconnetterti dall'estensione (il logout rimuove anche la sessione cloud dal dispositivo), cancellare i dati dall'estensione (funzione "Cancella tutto" / rimozione dati browser) e disinstallare l'estensione in qualsiasi momento.</p>
 
   <p><a href="subscriptions.html">← Torna ai piani</a></p>
 </body>

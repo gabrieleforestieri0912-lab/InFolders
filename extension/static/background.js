@@ -77,12 +77,12 @@
       "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
       "Content-Type": "application/json"
     };
+    const url = op === "signInWithIdToken" ? `${SUPABASE_URL}/auth/v1/token?grant_type=id_token` : `${SUPABASE_URL}/auth/v1/${op}`;
     const stored = await chrome.storage.local.get(["supabase_session"]);
     const accessToken = stored?.supabase_session?.access_token;
-    if (accessToken) {
+    if (accessToken && op !== "signInWithIdToken") {
       headers["Authorization"] = `Bearer ${accessToken}`;
     }
-    const url = op === "signInWithIdToken" ? `${SUPABASE_URL}/auth/v1/token?grant_type=id_token` : `${SUPABASE_URL}/auth/v1/${op}`;
     const res = await fetch(url, {
       method: "POST",
       headers,
@@ -109,27 +109,66 @@
   }
   function handleGoogleLogin() {
     return new Promise((resolve, reject) => {
-      chrome.identity.getAuthToken({ interactive: true }, (result) => {
-        if (chrome.runtime.lastError) {
-          return reject(new Error(chrome.runtime.lastError.message));
-        }
-        const token = typeof result === "string" ? result : result?.token;
-        if (token) resolve(token);
-        else reject(new Error("Nessun token ricevuto"));
+      const oauth = chrome.runtime.getManifest().oauth2;
+      if (!oauth || !oauth.client_id) {
+        return reject(new Error("OAuth non configurato nel manifest."));
+      }
+      const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+      authUrl.searchParams.set("client_id", oauth.client_id);
+      authUrl.searchParams.set("response_type", "id_token");
+      authUrl.searchParams.set("redirect_uri", chrome.identity.getRedirectURL());
+      console.log("[InFolders] Login Google", {
+        clientId: oauth.client_id,
+        redirectUri: chrome.identity.getRedirectURL(),
+        extensionId: chrome.runtime.id
       });
+      authUrl.searchParams.set("scope", "openid email profile");
+      authUrl.searchParams.set("nonce", crypto.randomUUID());
+      authUrl.searchParams.set("prompt", "consent");
+      chrome.identity.launchWebAuthFlow(
+        { url: authUrl.toString(), interactive: true },
+        (responseUrl) => {
+          if (chrome.runtime.lastError) {
+            const raw = chrome.runtime.lastError.message || "";
+            return reject(new Error(translateOAuthError(raw, oauth)));
+          }
+          try {
+            const url = new URL(responseUrl);
+            const hashParams = new URLSearchParams(url.hash.substring(1));
+            const token = hashParams.get("id_token");
+            if (token) resolve(token);
+            else reject(new Error("Token non ricevuto"));
+          } catch (e) {
+            reject(new Error("Errore nella risposta OAuth"));
+          }
+        }
+      );
     });
+  }
+  function translateOAuthError(raw, oauth) {
+    const msg = String(raw || "");
+    const clientId = oauth && oauth.client_id ? oauth.client_id : "sconosciuto";
+    if (/redirect_uri_mismatch/i.test(msg)) {
+      return `OAuth non configurato: il redirect URI ${chrome.identity.getRedirectURL()} non è autorizzato per il client ${clientId}. Nella Google Cloud Console, crea un client OAuth di tipo "Chrome extension" con l'ID esatto di questa estensione (chrome://extensions).`;
+    }
+    if (/invalid_client|client_id|unauthorized_client/i.test(msg)) {
+      return `Client OAuth non valido (${clientId}): verifica che esista nella Google Cloud Console e che il tipo sia "Chrome extension".`;
+    }
+    if (/access_denied|consent/i.test(msg)) {
+      return "Accesso annullato o consenso negato. Riprova.";
+    }
+    return msg;
   }
   function handleLogout() {
     return new Promise((resolve) => {
-      chrome.identity.getAuthToken({ interactive: false }, (result) => {
-        if (result?.token) {
-          chrome.identity.removeCachedAuthToken({ token: result.token }, () => {
-            chrome.storage.local.remove(["currentUser"], () => resolve());
-          });
-        } else {
-          chrome.storage.local.remove(["currentUser"], () => resolve());
-        }
-      });
+      const done = () => {
+        chrome.storage.local.remove(["currentUser", "supabase_session"], () => resolve());
+      };
+      if (chrome.identity.clearAllCachedAuthTokens) {
+        chrome.identity.clearAllCachedAuthTokens(done);
+      } else {
+        done();
+      }
     });
   }
   function handleAddChat(chat) {
@@ -149,11 +188,12 @@
         let folder = list.find((f) => f.name === platform);
         if (!folder) {
           let newCounter = counter;
-          folder = { id: ++newCounter, name: platform, subfolders: [], chats: [] };
+          folder = { id: ++newCounter, name: platform, subfolders: [], chats: [], updatedAt: new Date().toISOString() };
           list.push(folder);
           folderIdCounters[uid] = newCounter;
         }
         folder.chats.push(chat);
+        folder.updatedAt = new Date().toISOString();
         foldersCache[uid] = list;
         chrome.storage.local.set(
           {

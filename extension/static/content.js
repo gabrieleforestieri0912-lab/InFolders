@@ -302,8 +302,8 @@
         "premium.pro.start": "Inizia Prova Gratuita",
         "premium.pro.features.unlimited_folders": "Cartelle illimitate",
         "premium.pro.features.unlimited_chats": "Chat illimitate",
-        "premium.pro.features.cloud_backup": "Backup cloud (in sviluppo)",
-        "premium.pro.features.multi_device": "Multi-dispositivo (in sviluppo)",
+        "premium.pro.features.cloud_backup": "Backup cloud",
+        "premium.pro.features.multi_device": "Multi-dispositivo (sync bidirezionale)",
         "premium.pro.features.search": "Ricerca cartelle/chat",
         "premium.pro.features.priority_support": "Supporto prioritario",
         "premium.team": "Team",
@@ -424,8 +424,8 @@
         "premium.pro.start": "Start Free Trial",
         "premium.pro.features.unlimited_folders": "Unlimited folders",
         "premium.pro.features.unlimited_chats": "Unlimited chats",
-        "premium.pro.features.cloud_backup": "Cloud backup (coming soon)",
-        "premium.pro.features.multi_device": "Multi-device (coming soon)",
+        "premium.pro.features.cloud_backup": "Cloud backup",
+        "premium.pro.features.multi_device": "Multi-device (two-way sync)",
         "premium.pro.features.search": "Folder/chat search",
         "premium.pro.features.priority_support": "Priority support",
         "premium.team": "Team",
@@ -489,8 +489,35 @@
     strings = langData.strings;
     currentLang = lang;
   }
+  function extensionContextValid() {
+    try {
+      return !!(chrome.runtime && chrome.runtime.id);
+    } catch (e) {
+      return false;
+    }
+  }
+  function requireExtensionContext() {
+    return extensionContextValid();
+  }
+  window.addEventListener("error", (event) => {
+    const msg = event && event.message ? String(event.message) : "";
+    if (msg.indexOf("Extension context invalidated") !== -1) {
+      if (event.preventDefault) event.preventDefault();
+    }
+  }, true);
+  window.addEventListener("unhandledrejection", (event) => {
+    const reason = event && event.reason;
+    const msg = reason && reason.message ? String(reason.message) : reason ? String(reason) : "";
+    if (msg.indexOf("Extension context invalidated") !== -1) {
+      if (event.preventDefault) event.preventDefault();
+    }
+  }, true);
   function initLanguage(callback) {
     const detected = (navigator.language || "it").split("-")[0];
+    if (!requireExtensionContext()) {
+      if (callback) callback("it");
+      return;
+    }
     chrome.storage.local.get(["infolders_lang"], (result) => {
       const lang = result.infolders_lang || (LANGUAGES[detected] ? detected : "it");
       loadStrings(lang);
@@ -21525,7 +21552,7 @@ ${suffix}`;
   function initSupabase(url, key) {
     _client = createClient(url, key, {
       auth: {
-        persistSession: true,
+        persistSession: false,
         autoRefreshToken: true
       }
     });
@@ -21540,8 +21567,36 @@ ${suffix}`;
     }
     throw new Error("Supabase non configurato. Chiamare initSupabase() con url e chiave.");
   }
-  async function signInWithGoogleToken(googleToken) {
+  async function restoreSupabaseSession() {
+    try {
+      const stored = await chrome.storage.local.get(["supabase_session"]);
+      if (!stored?.supabase_session?.access_token) return;
+      const supabase = getSupabase();
+      await supabase.auth.setSession(stored.supabase_session);
+    } catch (e) {
+      console.warn("InFolders restore sessione:", e);
+    }
+  }
+  function sessionMatchesGoogleUser(session, googleSub) {
+    if (!session?.user || !googleSub) return false;
+    const u = session.user;
+    return (
+      u.id === googleSub ||
+      u.sub === googleSub ||
+      u.user_metadata?.sub === googleSub ||
+      (Array.isArray(u.identities) && u.identities.some((i) => i.id === googleSub || i.user_id === googleSub))
+    );
+  }
+  async function signInWithGoogleToken(googleToken, expectedGoogleSub) {
     const supabase = getSupabase();
+    const stored = await chrome.storage.local.get(["supabase_session"]);
+    if (stored?.supabase_session?.access_token && sessionMatchesGoogleUser(stored.supabase_session, expectedGoogleSub)) {
+      try {
+        const { error: setErr } = await supabase.auth.setSession(stored.supabase_session);
+        if (!setErr) return { session: stored.supabase_session };
+      } catch (e) {
+      }
+    }
     const { data, error } = await supabase.auth.signInWithIdToken({
       provider: "google",
       token: googleToken
@@ -21560,7 +21615,8 @@ ${suffix}`;
         folders: data.folders || [],
         bookmarks: data.bookmarks || [],
         folderIdCounter: data.folder_id_counter || 0,
-        premiumData: data.premium_data
+        premiumData: data.premium_data,
+        tombstones: Array.isArray(data.tombstones) ? data.tombstones : []
       };
     }
     return null;
@@ -21573,6 +21629,7 @@ ${suffix}`;
       bookmarks: data.bookmarks,
       folder_id_counter: data.folderIdCounter,
       premium_data: data.premiumData || null,
+      tombstones: Array.isArray(data.tombstones) ? data.tombstones : [],
       updated_at: (/* @__PURE__ */ new Date()).toISOString()
     };
     const { error } = await supabase.from("user_data").upsert(payload, {
@@ -21582,11 +21639,19 @@ ${suffix}`;
   }
 
   // src/extension/lib/api.ts
-  function getApiBaseUrl() {
-    return "http://localhost:3000";
+  var DEFAULT_SITE_URL = "https://infolders.app";
+  async function getApiBaseUrl() {
+    try {
+      const stored = await chrome.storage.local.get(["infolders_site_url"]);
+      if (stored?.infolders_site_url) {
+        return String(stored.infolders_site_url).replace(/\/+$/, "");
+      }
+    } catch (e) {
+    }
+    return DEFAULT_SITE_URL;
   }
   async function createCheckoutSession(plan, userId, email) {
-    const baseUrl = getApiBaseUrl();
+    const baseUrl = await getApiBaseUrl();
     const res = await fetch(`${baseUrl}/api/create-checkout`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -21600,7 +21665,7 @@ ${suffix}`;
     return data.url;
   }
   async function sendTeamContact(data) {
-    const baseUrl = getApiBaseUrl();
+    const baseUrl = await getApiBaseUrl();
     const res = await fetch(`${baseUrl}/api/contact`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -21759,9 +21824,9 @@ ${suffix}`;
     {
       id: "pro",
       name: "Pro",
-      tagline: "Pagamento unico",
+      tagline: "Abbonamento mensile",
       price: "\u20AC9,99",
-      priceNote: "una tantum / vita",
+      priceNote: "mese",
       badge: "Pi\xF9 popolare",
       features: [
         { label: "Chat illimitate nelle cartelle", included: true },
@@ -21774,7 +21839,7 @@ ${suffix}`;
         { label: "Profili Istruzioni personalizzati", included: true },
         { label: "Supporto prioritario", included: false }
       ],
-      ctaLabel: "Acquista Pro \u2014 \u20AC9,99",
+      ctaLabel: "Acquista Pro \u2014 \u20AC9,99/mese",
       ctaHref: "/premium/success",
       highlighted: true
     },
@@ -21783,7 +21848,7 @@ ${suffix}`;
       name: "Team",
       tagline: "Per team e aziende",
       price: "\u20AC29,99",
-      priceNote: "per utente / anno",
+      priceNote: "mese",
       features: [
         { label: "Chat illimitate nelle cartelle", included: true },
         { label: "Cartelle e sottocartelle illimitate", included: true },
@@ -21810,6 +21875,7 @@ ${suffix}`;
   var folders = [];
   var folderIdCounter = 0;
   var infoldersPremium = null;
+  var syncTombstones = [];
   var folderSearchQuery = "";
   var folderUrlMap = /* @__PURE__ */ new Map();
   function getFolderColors() {
@@ -21879,7 +21945,11 @@ ${suffix}`;
       document.body.appendChild(container);
     }
     const toast = document.createElement("div");
-    const theme = currentTheme;
+    const theme = currentTheme || {
+      primary: "#a855f7",
+      glassBg: "rgba(20,20,30,0.9)",
+      buttonGlow: "0 0 0 rgba(0,0,0,0)"
+    };
     let icon, bgColor, borderColor;
     switch (type) {
       case "success":
@@ -21948,6 +22018,27 @@ ${suffix}`;
       showToast(err.message || "Errore nel pagamento. Riprova pi\xF9 tardi.", "warning");
     }
   }
+  // Rotte di sezione di Gemini (non conversazioni): parole corte note. Serve a non
+  // mostrare la UI su /app/gems, /app/library, /app/settings ecc.
+  var GEMINI_NON_CHAT_SEGMENTS = new Set([
+    "gems", "library", "collections", "settings", "updates", "apps", "extensions",
+    "starter-prompts", "new", "saved", "archive", "help", "profile", "about", "workspace"
+  ]);
+  // Una conversazione Gemini è /app/<id> (o /app/chat/<id>) con id lungo
+  // (hex/alnum, mai parola di sezione).
+  function isGeminiConversationPath(path) {
+    let p = path || "";
+    if (p.length > 1 && p.endsWith("/")) p = p.slice(0, -1);
+    const m = /^\/app\/(?:chat\/)?([^/?#]+)$/.exec(p);
+    if (!m) return false;
+    const seg = decodeURIComponent(m[1]);
+    if (GEMINI_NON_CHAT_SEGMENTS.has(seg)) return false;
+    return seg.length >= 12;
+  }
+  // Pagina di chat Gemini: la home "Nuova chat" (/app) o una conversazione /app/<id>.
+  function isGeminiChatPath(path) {
+    return path === "/app" || path === "/app/" || isGeminiConversationPath(path);
+  }
   function isChatUrl() {
     const host = window.location.hostname;
     const path = window.location.pathname;
@@ -21958,7 +22049,7 @@ ${suffix}`;
       case "claude.ai":
         return path === "/new" || /^\/chat\//.test(path);
       case "gemini.google.com":
-        return /^\/app\//.test(path);
+        return isGeminiChatPath(path);
       case "perplexity.ai":
       case "www.perplexity.ai":
         return /^\/(search|thread|library)\//.test(path);
@@ -21976,10 +22067,13 @@ ${suffix}`;
       currentTheme = config.theme;
       currentPlatform = config;
       initLanguage(() => {
-        injectUI();
+        syncUiWithPage();
         loadUserAndBookmarks();
         loadFoldersFromBackground();
-        syncPremiumStatusFromSupabase();
+        restoreSupabaseSession().then(async () => {
+          await syncPremiumStatusFromSupabase();
+          await syncFromCloud();
+        });
       });
     } catch (e) {
       console.warn("InFolders init:", e);
@@ -22014,6 +22108,11 @@ ${suffix}`;
       container.style.transform = "scale(1)";
       updateInPageButtonsPosition();
     }
+  }
+  function updateInPageButtonsAuth() {
+    const guideBtn = document.getElementById("infolders-guide-toggle");
+    if (!guideBtn) return;
+    guideBtn.style.display = currentUser ? "flex" : "none";
   }
   function createRoundButton(id, iconName, title, theme) {
     const btn = document.createElement("button");
@@ -22052,7 +22151,28 @@ ${suffix}`;
     });
     return btn;
   }
+  var _injectUIListenersAttached = false;
+  function syncUiWithPage() {
+    const isChat = isChatUrl();
+    const container = document.getElementById("infolders-inpage-buttons");
+    if (isChat) {
+      if (!container && currentTheme) {
+        injectUI();
+      } else if (container && !isSidebarOpen) {
+        showInPageButtons();
+      }
+    } else {
+      if (container) container.remove();
+      if (isSidebarOpen) closeSidebar();
+      const foldersSection = document.getElementById("infolders-inpage-folders-section");
+      if (foldersSection) foldersSection.remove();
+      document.querySelectorAll(".infolders-bookmark-wrap").forEach((el) => el.remove());
+      document.querySelectorAll(".infolders-chat-row").forEach((el) => el.classList.remove("infolders-chat-row"));
+    }
+  }
   function injectUI() {
+    if (document.getElementById("infolders-inpage-buttons")) return;
+    if (!isChatUrl()) return;
     const theme = currentTheme;
     const isRight = currentPlatform.sidebarPosition === "right";
     const container = document.createElement("div");
@@ -22083,21 +22203,17 @@ ${suffix}`;
     container.appendChild(guideBtn);
     document.body.appendChild(container);
     updateInPageButtonsPosition();
-    window.addEventListener("resize", updateInPageButtonsPosition);
-    if (typeof ResizeObserver !== "undefined") {
-      const ro = new ResizeObserver(() => {
-        updateInPageButtonsPosition();
-      });
-      ro.observe(document.documentElement);
+    updateInPageButtonsAuth();
+    if (!_injectUIListenersAttached) {
+      _injectUIListenersAttached = true;
+      window.addEventListener("resize", updateInPageButtonsPosition);
+      if (typeof ResizeObserver !== "undefined") {
+        const ro = new ResizeObserver(() => {
+          updateInPageButtonsPosition();
+        });
+        ro.observe(document.documentElement);
+      }
     }
-  }
-  function scheduleAutoOpenSidebarForGuest() {
-    setTimeout(() => {
-      if (currentUser) return;
-      if (!getPlatformConfig()) return;
-      if (isSidebarOpen) return;
-      openSidebar();
-    }, 450);
   }
   function toggleSidebar() {
     isSidebarOpen ? closeSidebar() : openSidebar();
@@ -22422,9 +22538,12 @@ ${suffix}`;
             <p style="margin:0;color:${theme.textSecondary};font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(currentUser.email)}</p>
           </div>
         </div>
+        <button id="sidebar-tour-btn" style="background:transparent;border:1px solid ${theme.appAccent}44;color:${theme.appAccent};padding:10px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;transition:all 0.2s ease;width:100%;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px;">${lucide_icons_default.get("help-circle", 14)} Rigioca il tour</button>
         <button id="sidebar-logout-btn" style="background:transparent;border:1px solid rgba(239,68,68,0.25);color:rgba(239,68,68,0.7);padding:10px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:500;transition:all 0.2s ease;width:100%;display:flex;align-items:center;justify-content:center;gap:8px;">${lucide_icons_default.get("log-out", 14)} Disconnetti account</button>
       </div>
     `;
+      const tourBtn = container.querySelector("#sidebar-tour-btn");
+      if (tourBtn) tourBtn.addEventListener("click", startGuidedTour);
       container.querySelector("#sidebar-logout-btn").addEventListener("click", logout);
     }
   }
@@ -22691,7 +22810,8 @@ ${suffix}`;
           subfolders: [],
           chats: [],
           color,
-          icon: "\u{1F4BC}"
+          icon: "\u{1F4BC}",
+          updatedAt: nowIso()
           // Default project icon
         });
         saveFolders();
@@ -23011,6 +23131,7 @@ ${suffix}`;
     updateFooter();
     addBtn.addEventListener("click", () => {
       if (selectedUrls.size === 0) return;
+      if (!requireExtensionContext()) return;
       chrome.storage.local.get(["infolders_premium"], (r) => {
         const existing = (folder.chats || []).length;
         if (!canAddAnotherChat(r.infolders_premium, folders, selectedUrls.size)) {
@@ -23024,6 +23145,7 @@ ${suffix}`;
             folder.chats.push({ name: c.name, url: c.url, platform: c.platform });
           }
         }
+        folder.updatedAt = nowIso();
         saveFolders();
         const container = document.getElementById("infolders-sidebar-content");
         if (container) renderFoldersList(container);
@@ -23127,6 +23249,7 @@ ${suffix}`;
         overlay.remove();
         return;
       }
+      nodeToMove.updatedAt = nowIso();
       if (target === "root") {
         folders.push(nodeToMove);
       } else {
@@ -23215,6 +23338,7 @@ ${suffix}`;
       } else {
         folder.icon = void 0;
       }
+      folder.updatedAt = nowIso();
       saveFolders();
       const container = document.getElementById("infolders-sidebar-content");
       if (container) renderFoldersList(container);
@@ -23273,6 +23397,7 @@ ${suffix}`;
     modal.querySelector("#color-cancel").addEventListener("click", () => overlay.remove());
     modal.querySelector("#color-save").addEventListener("click", () => {
       folder.color = selectedColor;
+      folder.updatedAt = nowIso();
       saveFolders();
       const container = document.getElementById("infolders-sidebar-content");
       if (container) renderFoldersList(container);
@@ -23393,6 +23518,7 @@ ${suffix}`;
       showFolderDialog("Rinomina cartella", folder.name, sanitizeColor(folder.color), "Salva", (name, color) => {
         folder.name = name;
         folder.color = color;
+        folder.updatedAt = nowIso();
         saveFolders();
         const c = document.getElementById("infolders-sidebar-content");
         if (c) renderFoldersList(c);
@@ -23549,6 +23675,16 @@ ${suffix}`;
           folders = data.folders || [];
           folderIdCounter = data.folderIdCounter || 0;
           bookmarks = data.bookmarks || [];
+          const importTs = nowIso();
+          (function stampImported(nodes) {
+            (nodes || []).forEach((f) => {
+              if (typeof f.updatedAt !== "string") f.updatedAt = importTs;
+              if (f.subfolders) stampImported(f.subfolders);
+            });
+          })(folders);
+          bookmarks.forEach((b) => {
+            if (typeof b.updatedAt !== "string") b.updatedAt = importTs;
+          });
           saveFolders();
           saveBookmarks();
           const container = document.getElementById("infolders-sidebar-content");
@@ -23568,6 +23704,8 @@ ${suffix}`;
   }
   function clearAllData() {
     if (!confirm("Sei sicuro di voler cancellare tutti i dati? Questa azione \xE8 irreversibile.")) return;
+    recordTombstone("folder", collectFolderIds(folders));
+    recordTombstone("bookmark", bookmarks.map((b) => b.id).filter((x) => x != null));
     folders = [];
     folderIdCounter = 0;
     bookmarks = [];
@@ -23646,7 +23784,7 @@ ${suffix}`;
   function addRootFolderFromSidebar() {
     const allowed = getFolderColors();
     showFolderDialog("Nuova cartella", "", allowed[0], "Crea", (name, color) => {
-      folders.push({ id: ++folderIdCounter, name, subfolders: [], chats: [], color });
+      folders.push({ id: ++folderIdCounter, name, subfolders: [], chats: [], color, updatedAt: nowIso() });
       saveFolders();
       const container = document.getElementById("infolders-sidebar-content");
       if (container) renderFoldersList(container);
@@ -23657,7 +23795,7 @@ ${suffix}`;
     showFolderDialog("Nuova sottocartella", "", allowed[0], "Crea", (name, color) => {
       const parent = findFolderById(folders, parentId);
       if (parent) {
-        parent.subfolders.push({ id: ++folderIdCounter, name, subfolders: [], chats: [], color });
+        parent.subfolders.push({ id: ++folderIdCounter, name, subfolders: [], chats: [], color, updatedAt: nowIso() });
         saveFolders();
         const container = document.getElementById("infolders-sidebar-content");
         if (container) renderFoldersList(container);
@@ -23666,6 +23804,8 @@ ${suffix}`;
   }
   function deleteFolderFromSidebar(id) {
     if (confirm("Eliminare questa cartella?")) {
+      const f = findFolderById(folders, id);
+      if (f) recordTombstone("folder", collectFolderIds([f]));
       folders = removeFolderById(folders, id);
       saveFolders();
       const container = document.getElementById("infolders-sidebar-content");
@@ -23689,7 +23829,11 @@ ${suffix}`;
       return true;
     });
   }
+  function tombstoneStorageKey() {
+    return currentUser ? `infolders_tombstones_${currentUser.id}` : "infolders_tombstones";
+  }
   function loadUserAndBookmarks() {
+    if (!requireExtensionContext()) return;
     chrome.storage.local.get(["currentUser", "infolders_bookmarks", "infolders_premium"], (result) => {
       currentUser = result.currentUser || null;
       if (currentUser && currentUser.accessToken) {
@@ -23699,12 +23843,17 @@ ${suffix}`;
       }
       bookmarks = result.infolders_bookmarks || [];
       infoldersPremium = result.infolders_premium || null;
+      const tombKey = tombstoneStorageKey();
+      chrome.storage.local.get([tombKey], (res) => {
+        syncTombstones = Array.isArray(res && res[tombKey]) ? res[tombKey] : [];
+      });
+      updateInPageButtonsAuth();
       if (isSidebarOpen) switchTab("account");
-      else if (!currentUser) scheduleAutoOpenSidebarForGuest();
     });
   }
   async function syncPremiumStatusFromSupabase() {
     if (!currentUser) return;
+    if (!requireExtensionContext()) return;
     try {
       const data = await syncUserData(currentUser.id);
       if (data && data.premiumData) {
@@ -23714,10 +23863,78 @@ ${suffix}`;
     } catch {
     }
   }
+  var _syncing = false;
+  var _syncQueued = false;
+  var _syncTimer = null;
+  function queueCloudSync(delay) {
+    if (_syncTimer) return;
+    _syncTimer = setTimeout(() => {
+      _syncTimer = null;
+      runCloudSync();
+    }, delay == null ? 800 : delay);
+  }
+  async function runCloudSync() {
+    if (_syncing) {
+      _syncQueued = true;
+      return;
+    }
+    _syncing = true;
+    try {
+      await syncFromCloud();
+    } finally {
+      _syncing = false;
+      if (_syncQueued) {
+        _syncQueued = false;
+        runCloudSync();
+      }
+    }
+  }
+  async function syncFromCloud() {
+    if (!currentUser) return;
+    if (!premiumActive()) return;
+    if (!requireExtensionContext()) return;
+    let data = null;
+    try {
+      data = await syncUserData(currentUser.id);
+    } catch (e) {
+      console.warn("InFolders sync pull:", e);
+      return;
+    }
+    const merged = mergeCloudData(
+      { folders, bookmarks, folderIdCounter, tombstones: syncTombstones },
+      {
+        folders: (data && data.folders) || [],
+        bookmarks: (data && data.bookmarks) || [],
+        folderIdCounter: (data && data.folderIdCounter) || 0,
+        tombstones: (data && data.tombstones) || []
+      }
+    );
+    folders = merged.folders;
+    bookmarks = merged.bookmarks;
+    folderIdCounter = merged.folderIdCounter;
+    syncTombstones = merged.tombstones;
+    chrome.storage.local.set({
+      [`folders_${currentUser.id}`]: folders,
+      [`folderIdCounter_${currentUser.id}`]: folderIdCounter,
+      infolders_bookmarks: bookmarks,
+      [tombstoneStorageKey()]: syncTombstones
+    });
+    buildFolderUrlMap();
+    refreshAllFolderViews();
+    if (isSidebarOpen) {
+      const container = document.getElementById("infolders-sidebar-content");
+      if (container) {
+        renderFoldersList(container);
+        renderBookmarksList(container);
+      }
+    }
+    await pushCloudData();
+  }
   function saveBookmarks() {
     if (!currentUser) return;
-    chrome.storage.local.set({ infolders_bookmarks: bookmarks });
-    syncToSupabase();
+    if (!requireExtensionContext()) return;
+    chrome.storage.local.set({ infolders_bookmarks: bookmarks, [tombstoneStorageKey()]: syncTombstones });
+    queueCloudSync();
   }
   function addBookmark(name, url, platform) {
     if (!currentUser) {
@@ -23725,21 +23942,25 @@ ${suffix}`;
       setTimeout(() => switchTab("account"), 400);
       return;
     }
-    bookmarks.unshift({ id: Date.now(), name, url, platform, addedAt: (/* @__PURE__ */ new Date()).toISOString() });
+    bookmarks.unshift({ id: Date.now(), name, url, platform, addedAt: (/* @__PURE__ */ new Date()).toISOString(), updatedAt: nowIso() });
     saveBookmarks();
     openSidebar();
     setTimeout(() => switchTab("bookmarks"), 300);
   }
   function removeBookmark(idx) {
+    const removed = bookmarks[idx];
+    if (removed && removed.id != null) recordTombstone("bookmark", removed.id);
     bookmarks.splice(idx, 1);
     saveBookmarks();
     const container = document.getElementById("infolders-sidebar-content");
     if (container) renderBookmarksList(container);
   }
   function openChat(url) {
+    if (!requireExtensionContext()) return;
     chrome.tabs.create({ url });
   }
   function loadFoldersFromBackground() {
+    if (!requireExtensionContext()) return;
     chrome.runtime.sendMessage({ action: "getFolders" }, (response) => {
       if (response && response.folders) {
         folders = response.folders || [];
@@ -23752,13 +23973,14 @@ ${suffix}`;
   }
   function saveFolders() {
     if (!currentUser) return;
+    if (!requireExtensionContext()) return;
     chrome.runtime.sendMessage({
       action: "saveFolders",
       userId: currentUser.id,
       folders,
       counter: folderIdCounter
     });
-    syncToSupabase();
+    queueCloudSync();
     buildFolderUrlMap();
     refreshAllFolderViews();
   }
@@ -23853,6 +24075,11 @@ ${suffix}`;
     });
   }
   function showPromptEditor(container) {
+    if (!premiumActive()) {
+      showToast("La libreria prompt \xE8 una funzionalit\xE0 Pro. Attiva il piano per creare nuovi prompt.", "warning", 4e3);
+      openPremiumPopup();
+      return;
+    }
     const theme = currentTheme;
     const overlay = document.createElement("div");
     Object.assign(overlay.style, { position: "fixed", top: "0", left: "0", width: "100%", height: "100%", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)", zIndex: "2147483647", display: "flex", alignItems: "center", justifyContent: "center" });
@@ -23961,6 +24188,11 @@ ${suffix}`;
     container.querySelector("#add-profile-btn").addEventListener("click", () => showProfileEditor(container));
   }
   function showProfileEditor(container) {
+    if (!premiumActive()) {
+      showToast("I profili istruzioni personalizzati sono una funzionalit\xE0 Pro. Attiva il piano per crearne di nuovi.", "warning", 4e3);
+      openPremiumPopup();
+      return;
+    }
     const theme = currentTheme;
     const overlay = document.createElement("div");
     Object.assign(overlay.style, { position: "fixed", top: "0", left: "0", width: "100%", height: "100%", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)", zIndex: "2147483647", display: "flex", alignItems: "center", justifyContent: "center" });
@@ -23997,24 +24229,169 @@ ${suffix}`;
   }
   function startGuidedTour() {
     const theme = currentTheme;
-    const steps = [
+    if (currentUser && !isSidebarOpen) {
+      openSidebar();
+    }
+    if (!document.getElementById("infolders-tour-styles")) {
+      const style = document.createElement("style");
+      style.id = "infolders-tour-styles";
+      style.textContent = `
+        @keyframes infoldersFadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes infoldersTourPopIn { from { opacity: 0; transform: translateY(12px) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        @keyframes infoldersTourPulse {
+          0% { box-shadow: 0 0 0 0 ${theme.appAccent}55, 0 0 16px ${theme.appAccent}66; }
+          70% { box-shadow: 0 0 0 16px transparent, 0 0 26px ${theme.appAccent}aa; }
+          100% { box-shadow: 0 0 0 0 transparent, 0 0 16px ${theme.appAccent}66; }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+    const loggedIn = !!currentUser;
+    const steps = loggedIn ? [
+      { icon: "star", title: "Benvenuto in InFolders!", desc: "Tutto quello che ti serve è qui nella sidebar: cartelle, bookmark, prompt, profili e impostazioni. Esploriamoli insieme.", highlight: null },
+      { icon: "folder", title: "Cartelle", desc: "Crea cartelle e sottocartelle per organizzare le conversazioni. Trascina le chat con drag & drop, cambia colore alle cartelle e tienile sempre in ordine.", tab: "folders", selector: 'button[data-tab="folders"]' },
+      { icon: "bookmark", title: "Bookmark", desc: "Salva le chat importanti con un clic sul pulsante bookmark. Le trovi tutte qui, pronte per essere riaperte quando vuoi.", tab: "bookmarks", selector: 'button[data-tab="bookmarks"]' },
+      { icon: "file-text", title: "Libreria Prompt", desc: "Crea e salva i tuoi prompt preferiti categorizzati per argomento. Usali in qualsiasi chat con un clic, senza doverli riscrivere ogni volta.", tab: "prompts", selector: 'button[data-tab="prompts"]' },
+      { icon: "user-check", title: "Profili Istruzioni", desc: "Definisci profili con istruzioni personalizzate per ChatGPT. Attiva il profilo giusto per ogni contesto di lavoro o studio.", tab: "profiles", selector: 'button[data-tab="profiles"]' },
+      { icon: "settings", title: "Impostazioni e Sync", desc: "Da qui puoi esportare, importare o cancellare i tuoi dati. Con il login attivo i dati vengono sincronizzati automaticamente con il cloud.", tab: "tools", selector: 'button[data-tab="tools"]' },
+      { icon: "crown", title: "Premium", desc: "Nella sezione Account vedi il tuo piano. Sblocca chat illimitate, sincronizzazione multi-dispositivo e profili istruzioni personalizzati.", tab: "account", selector: 'button[data-tab="account"]' }
+    ] : [
       { icon: "star", title: "Benvenuto in InFolders!", desc: "Organizza le tue chat di ChatGPT, Gemini, Claude e Perplexity in cartelle. Salva bookmark, gestisci prompt e profili, tutto in un unico posto.", highlight: null },
-      { icon: "folder", title: "Cartelle", desc: "Crea cartelle e sottocartelle per organizzare le conversazioni. Trascina le chat con drag & drop, cambia colore alle cartelle e tienile sempre in ordine.", highlight: "infolders-sidebar-btn" },
-      { icon: "bookmark", title: "Bookmark", desc: "Salva le chat importanti con un clic sul pulsante bookmark. Le trovi tutte nella sezione Bookmark, pronte per essere riaperte quando vuoi.", highlight: "infolders-sidebar-btn" },
-      { icon: "file-text", title: "Libreria Prompt", desc: "Crea e salva i tuoi prompt preferiti categorizzati per argomento. Usali in qualsiasi chat con un clic, senza doverli riscrivere ogni volta.", highlight: "infolders-sidebar-btn" },
-      { icon: "user-check", title: "Profili Istruzioni", desc: "Definisci profili con istruzioni personalizzate per ChatGPT. Attiva il profilo giusto per ogni contesto di lavoro o studio.", highlight: "infolders-sidebar-btn" },
-      { icon: "settings", title: "Impostazioni e Sync", desc: "Dalla sezione Impostazioni puoi esportare, importare o cancellare i tuoi dati. I dati vengono sincronizzati automaticamente con il cloud se sei loggato.", highlight: "infolders-sidebar-btn" },
-      { icon: "crown", title: "Premium", desc: "Sblocca chat illimitate, sincronizzazione multi-dispositivo e profili istruzioni personalizzati. Nessun limite, solo produttivit\xE0.", highlight: null }
+      { icon: "folder", title: "Cartelle", desc: "Crea cartelle e sottocartelle per organizzare le conversazioni. Trascina le chat con drag & drop, cambia colore alle cartelle e tienile sempre in ordine.", highlight: "infolders-sidebar-toggle" },
+      { icon: "bookmark", title: "Bookmark", desc: "Salva le chat importanti con un clic sul pulsante bookmark. Le trovi tutte nella sezione Bookmark, pronte per essere riaperte quando vuoi.", highlight: "infolders-sidebar-toggle" },
+      { icon: "file-text", title: "Libreria Prompt", desc: "Crea e salva i tuoi prompt preferiti categorizzati per argomento. Usali in qualsiasi chat con un clic, senza doverli riscrivere ogni volta.", highlight: "infolders-sidebar-toggle" },
+      { icon: "user-check", title: "Profili Istruzioni", desc: "Definisci profili con istruzioni personalizzate per ChatGPT. Attiva il profilo giusto per ogni contesto di lavoro o studio.", highlight: "infolders-sidebar-toggle" },
+      { icon: "settings", title: "Impostazioni e Sync", desc: "Dalla sezione Impostazioni puoi esportare, importare o cancellare i tuoi dati. I dati vengono sincronizzati automaticamente con il cloud se sei loggato.", highlight: "infolders-sidebar-toggle" },
+      { icon: "crown", title: "Premium", desc: "Sblocca chat illimitate, sincronizzazione multi-dispositivo e profili istruzioni personalizzati. Nessun limite, solo produttività.", highlight: "infolders-premium-toggle" }
     ];
     let currentStep = 0;
     let overlay = null;
+    let popup = null;
+    let ring = null;
+    let arrow = null;
+    function clearSpotlight() {
+      if (ring) {
+        ring.remove();
+        ring = null;
+      }
+      if (arrow) {
+        arrow.remove();
+        arrow = null;
+      }
+      if (popup) {
+        popup.style.position = "";
+        popup.style.left = "";
+        popup.style.top = "";
+      }
+    }
+    function addRing(target) {
+      const rect = target.getBoundingClientRect();
+      ring = document.createElement("div");
+      ring.id = "infolders-tour-ring";
+      Object.assign(ring.style, {
+        position: "fixed",
+        left: `${rect.left - 6}px`,
+        top: `${rect.top - 6}px`,
+        width: `${rect.width + 12}px`,
+        height: `${rect.height + 12}px`,
+        borderRadius: "50%",
+        border: `2px solid ${theme.appAccent}`,
+        boxShadow: `0 0 16px ${theme.appAccent}66`,
+        pointerEvents: "none",
+        zIndex: "2147483647",
+        animation: "infoldersTourPulse 1.8s ease-out infinite"
+      });
+      overlay.appendChild(ring);
+    }
+    function addArrow(target, placement) {
+      const trect = target.getBoundingClientRect();
+      const prect = popup.getBoundingClientRect();
+      const arrowSize = 10;
+      const clampPos = (val, max) => Math.min(Math.max(val, 24), Math.max(24, max - 24));
+      arrow = document.createElement("div");
+      arrow.style.position = "absolute";
+      arrow.style.width = "0";
+      arrow.style.height = "0";
+      arrow.style.zIndex = "1";
+      if (placement === "right") {
+        arrow.style.left = `${-arrowSize}px`;
+        arrow.style.top = `${clampPos(trect.top + trect.height / 2 - prect.top, prect.height) - arrowSize / 2}px`;
+        arrow.style.borderTop = `${arrowSize}px solid transparent`;
+        arrow.style.borderBottom = `${arrowSize}px solid transparent`;
+        arrow.style.borderRight = `${arrowSize}px solid ${theme.bg}`;
+      } else if (placement === "left") {
+        arrow.style.right = `${-arrowSize}px`;
+        arrow.style.top = `${clampPos(trect.top + trect.height / 2 - prect.top, prect.height) - arrowSize / 2}px`;
+        arrow.style.borderTop = `${arrowSize}px solid transparent`;
+        arrow.style.borderBottom = `${arrowSize}px solid transparent`;
+        arrow.style.borderLeft = `${arrowSize}px solid ${theme.bg}`;
+      } else if (placement === "bottom") {
+        arrow.style.top = `${-arrowSize}px`;
+        arrow.style.left = `${clampPos(trect.left + trect.width / 2 - prect.left, prect.width) - arrowSize / 2}px`;
+        arrow.style.borderLeft = `${arrowSize}px solid transparent`;
+        arrow.style.borderRight = `${arrowSize}px solid transparent`;
+        arrow.style.borderBottom = `${arrowSize}px solid ${theme.bg}`;
+      } else if (placement === "top") {
+        arrow.style.bottom = `${-arrowSize}px`;
+        arrow.style.left = `${clampPos(trect.left + trect.width / 2 - prect.left, prect.width) - arrowSize / 2}px`;
+        arrow.style.borderLeft = `${arrowSize}px solid transparent`;
+        arrow.style.borderRight = `${arrowSize}px solid transparent`;
+        arrow.style.borderTop = `${arrowSize}px solid ${theme.bg}`;
+      }
+      popup.appendChild(arrow);
+    }
+    function positionPopup(step) {
+      const target = step.highlight ? document.getElementById(step.highlight) : step.selector ? document.querySelector("#infolders-sidebar " + step.selector) : null;
+      if (!target) return;
+      target.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      const trect = target.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const gap = 24;
+      const margin = 16;
+      const pw = popup.offsetWidth;
+      const ph = popup.offsetHeight;
+      const clampX = (x) => Math.min(Math.max(x, margin), Math.max(margin, vw - pw - margin));
+      const clampY = (y) => Math.min(Math.max(y, margin), Math.max(margin, vh - ph - margin));
+      let placement = null;
+      let left = null;
+      let top = null;
+      if (trect.right + gap + pw <= vw - margin) {
+        placement = "right";
+        left = trect.right + gap;
+        top = clampY(trect.top + trect.height / 2 - ph / 2);
+      } else if (trect.left - gap - pw >= margin) {
+        placement = "left";
+        left = trect.left - gap - pw;
+        top = clampY(trect.top + trect.height / 2 - ph / 2);
+      } else if (trect.bottom + gap + ph <= vh - margin) {
+        placement = "bottom";
+        left = clampX(trect.left + trect.width / 2 - pw / 2);
+        top = trect.bottom + gap;
+      } else if (trect.top - gap - ph >= margin) {
+        placement = "top";
+        left = clampX(trect.left + trect.width / 2 - pw / 2);
+        top = trect.top - gap - ph;
+      }
+      if (!placement) return;
+      popup.style.position = "fixed";
+      popup.style.left = `${left}px`;
+      popup.style.top = `${top}px`;
+      addArrow(target, placement);
+      addRing(target);
+    }
     function renderStep(index) {
       if (!overlay) return;
       const step = steps[index];
       const isFirst = index === 0;
       const isLast = index === steps.length - 1;
       const popup2 = overlay.querySelector("#infolders-tour-popup");
-      popup2.innerHTML = `
+      clearSpotlight();
+      const content = document.createElement("div");
+      content.style.animation = "infoldersTourPopIn 0.28s ease";
+      content.style.maxHeight = "calc(100vh - 110px)";
+      content.style.overflowY = "auto";
+      content.innerHTML = `
       <div style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:16px;">
         <div style="width:60px;height:60px;border-radius:16px;flex-shrink:0;background:${theme.appAccent}18;display:flex;align-items:center;justify-content:center;color:${theme.appAccent};">${lucide_icons_default.get(step.icon, 28)}</div>
         <div>
@@ -24034,6 +24411,8 @@ ${suffix}`;
         <button id="tour-skip" style="background:transparent;border:none;color:${theme.textSecondary};cursor:pointer;font-size:11px;text-decoration:underline;text-underline-offset:3px;opacity:0.6;">Salta guida</button>
       </div>
     `;
+      popup2.innerHTML = "";
+      popup2.appendChild(content);
       popup2.querySelector("#tour-skip").addEventListener("click", closeTour);
       const prevBtn = popup2.querySelector("#tour-prev");
       if (prevBtn) prevBtn.addEventListener("click", () => goTo(index - 1));
@@ -24041,6 +24420,15 @@ ${suffix}`;
       if (nextBtn) nextBtn.addEventListener("click", () => goTo(index + 1));
       const finishBtn = popup2.querySelector("#tour-finish");
       if (finishBtn) finishBtn.addEventListener("click", closeTour);
+      if (step.tab && typeof switchTab === "function") {
+        try {
+          switchTab(step.tab);
+        } catch (e) {
+        }
+      }
+      requestAnimationFrame(() => {
+        positionPopup(step);
+      });
     }
     function goTo(index) {
       if (index < 0 || index >= steps.length) return;
@@ -24052,6 +24440,7 @@ ${suffix}`;
         overlay.remove();
         overlay = null;
       }
+      clearSpotlight();
     }
     overlay = document.createElement("div");
     overlay.id = "infolders-tour-overlay";
@@ -24070,7 +24459,7 @@ ${suffix}`;
       justifyContent: "center",
       animation: "infoldersFadeIn 0.25s ease"
     });
-    const popup = document.createElement("div");
+    popup = document.createElement("div");
     popup.id = "infolders-tour-popup";
     Object.assign(popup.style, {
       background: theme.bg,
@@ -24086,19 +24475,232 @@ ${suffix}`;
     document.body.appendChild(overlay);
     renderStep(0);
   }
-  function syncToSupabase() {
+  /* __INFOLDERS_MERGE_START__ */
+  // Merge bidirezionale cartelle/bookmark con conflict resolution per timestamp
+  // (last-write-wins per item) e tombstone per le eliminazioni. Funzioni pure,
+  // estratti da scripts/merge-unit-test.js tramite i marker qui sotto.
+  function nowIso() {
+    return /* @__PURE__ */ new Date().toISOString();
+  }
+  function maxTs(a, b) {
+    a = typeof a === "string" ? a : "";
+    b = typeof b === "string" ? b : "";
+    return a > b ? a : b;
+  }
+  function collectFolderIds(nodes, out) {
+    out = out || [];
+    (nodes || []).forEach((f) => {
+      if (f && f.id != null) out.push(f.id);
+      if (f && f.subfolders) collectFolderIds(f.subfolders, out);
+    });
+    return out;
+  }
+  function mergeChats(a, b) {
+    const byUrl = new Map();
+    (a || []).forEach((c) => {
+      if (c && c.url) byUrl.set(c.url, c);
+    });
+    (b || []).forEach((c) => {
+      if (c && c.url && !byUrl.has(c.url)) byUrl.set(c.url, c);
+    });
+    return Array.from(byUrl.values());
+  }
+  function cloneFolderNode(f, now) {
+    const node = Object.assign({}, f, {
+      chats: Array.isArray(f.chats) ? f.chats.slice() : [],
+      subfolders: []
+    });
+    if (typeof node.updatedAt !== "string") node.updatedAt = now;
+    return node;
+  }
+  function flattenFolderMap(nodes, parentId, map, order) {
+    (nodes || []).forEach((n) => {
+      if (!n || n.id == null) return;
+      if (!(n.id in map)) {
+        map[n.id] = { node: n, parentId: parentId == null ? null : parentId };
+        order.push(n.id);
+      }
+      if (n.subfolders && n.subfolders.length) flattenFolderMap(n.subfolders, n.id, map, order);
+    });
+    return map;
+  }
+  function mergeFolderTrees(localNodes, cloudNodes, tombMap, now) {
+    const localOrder = [];
+    const cloudOrder = [];
+    const localMap = flattenFolderMap(localNodes, null, {}, localOrder);
+    const cloudMap = flattenFolderMap(cloudNodes, null, {}, cloudOrder);
+    const allIds = [];
+    const seen = {};
+    localOrder.concat(cloudOrder).forEach((id) => {
+      if (!seen[id]) {
+        seen[id] = 1;
+        allIds.push(id);
+      }
+    });
+    const winners = {};
+    const deleted = new Set();
+    for (let i = 0; i < allIds.length; i++) {
+      const id = allIds[i];
+      const lRec = localMap[id];
+      const cRec = cloudMap[id];
+      const lts = lRec && typeof lRec.node.updatedAt === "string" ? lRec.node.updatedAt : "";
+      const cts = cRec && typeof cRec.node.updatedAt === "string" ? cRec.node.updatedAt : "";
+      const editedAt = maxTs(lts, cts);
+      const tomb = tombMap.get("folder__" + id);
+      if (tomb) {
+        const anyAfter = (lts && lts > tomb.deletedAt) || (cts && cts > tomb.deletedAt);
+        if (!anyAfter) {
+          deleted.add(id);
+          continue;
+        }
+      }
+      let winner = null;
+      let loser = null;
+      if (lRec && cRec) {
+        if (cts > lts) {
+          winner = cRec;
+          loser = lRec;
+        } else {
+          winner = lRec;
+          loser = cRec;
+        }
+      } else {
+        winner = lRec || cRec;
+      }
+      const node = cloneFolderNode(winner.node, now);
+      node.updatedAt = editedAt || now;
+      if (loser) node.chats = mergeChats(winner.node.chats, loser.node.chats);
+      winners[id] = { node, parentId: winner.parentId };
+    }
+    const childrenOf = new Map();
+    const roots = [];
+    for (let i = 0; i < allIds.length; i++) {
+      const id = allIds[i];
+      if (deleted.has(id) || !winners[id]) continue;
+      const w = winners[id];
+      const parentId = w.parentId;
+      if (parentId != null && winners[parentId] && !deleted.has(parentId)) {
+        if (!childrenOf.has(parentId)) childrenOf.set(parentId, []);
+        childrenOf.get(parentId).push(id);
+      } else {
+        roots.push(id);
+      }
+    }
+    function build(id) {
+      const node = winners[id].node;
+      node.subfolders = childrenOf.has(id) ? childrenOf.get(id).map(build) : [];
+      return node;
+    }
+    return { folders: roots.map(build), deletedIds: deleted };
+  }
+  function mergeBookmarks(localList, cloudList, tombMap, now) {
+    const localMap = new Map();
+    (localList || []).forEach((b) => {
+      if (b && b.id != null && !localMap.has(b.id)) localMap.set(b.id, b);
+    });
+    const cloudMap = new Map();
+    (cloudList || []).forEach((b) => {
+      if (b && b.id != null && !cloudMap.has(b.id)) cloudMap.set(b.id, b);
+    });
+    const ids = [];
+    const seen = new Set();
+    localMap.forEach((_, id) => {
+      if (!seen.has(id)) {
+        seen.add(id);
+        ids.push(id);
+      }
+    });
+    cloudMap.forEach((_, id) => {
+      if (!seen.has(id)) {
+        seen.add(id);
+        ids.push(id);
+      }
+    });
+    const out = [];
+    const deleted = new Set();
+    ids.forEach((id) => {
+      const l = localMap.get(id);
+      const c = cloudMap.get(id);
+      const lts = l ? typeof l.updatedAt === "string" ? l.updatedAt : l.addedAt || "" : "";
+      const cts = c ? typeof c.updatedAt === "string" ? c.updatedAt : c.addedAt || "" : "";
+      const editedAt = maxTs(lts, cts);
+      const tomb = tombMap.get("bookmark__" + id);
+      if (tomb) {
+        const anyAfter = (lts && lts > tomb.deletedAt) || (cts && cts > tomb.deletedAt);
+        if (!anyAfter) {
+          deleted.add(id);
+          return;
+        }
+      }
+      const winner = !c ? l : !l ? c : cts > lts ? c : l;
+      out.push(Object.assign({}, winner, { updatedAt: editedAt || now }));
+    });
+    return { bookmarks: out, deletedIds: deleted };
+  }
+  function mergeCloudData(local, cloud, now) {
+    now = now || nowIso();
+    const tombList = [];
+    const tombMap = new Map();
+    const addTomb = (t) => {
+      if (!t || t.id == null) return;
+      const key = (t.kind || "folder") + "__" + t.id;
+      if (!tombMap.has(key)) {
+        tombMap.set(key, t);
+        tombList.push(t);
+      }
+    };
+    ((cloud && cloud.tombstones) || []).forEach(addTomb);
+    ((local && local.tombstones) || []).forEach(addTomb);
+    const folderMerge = mergeFolderTrees((local && local.folders) || [], (cloud && cloud.folders) || [], tombMap, now);
+    const bookmarkMerge = mergeBookmarks((local && local.bookmarks) || [], (cloud && cloud.bookmarks) || [], tombMap, now);
+    // Il tombstone sopravvive finche' l'item NON e' vivo nel risultato del merge
+    // (serve anche a coprire dispositivi rimasti offline a lungo: senza tombstone
+    // un item eliminato tornerebbe a vivere al loro primo sync). Se l'item e'
+    // risorto (modifica post-delete) il tombstone decade.
+    const aliveKeys = new Set();
+    collectFolderIds(folderMerge.folders).forEach((id) => aliveKeys.add("folder__" + id));
+    bookmarkMerge.bookmarks.forEach((b) => {
+      if (b && b.id != null) aliveKeys.add("bookmark__" + b.id);
+    });
+    const survivors = tombList.filter((t) => !aliveKeys.has((t.kind || "folder") + "__" + t.id));
+    return {
+      folders: folderMerge.folders,
+      bookmarks: bookmarkMerge.bookmarks,
+      folderIdCounter: Math.max((local && local.folderIdCounter) || 0, (cloud && cloud.folderIdCounter) || 0),
+      tombstones: survivors
+    };
+  }
+  var __INFOLDERS_MERGE__ = { mergeCloudData, mergeFolderTrees, mergeBookmarks, collectFolderIds, nowIso, maxTs };
+  /* __INFOLDERS_MERGE_END__ */
+  function recordTombstone(kind, ids, at) {
+    const ts = at || nowIso();
+    const existing = new Set(syncTombstones.map((t) => (t.kind || "folder") + "__" + t.id));
+    (Array.isArray(ids) ? ids : [ids]).forEach((id) => {
+      if (id == null) return;
+      const key = kind + "__" + id;
+      if (!existing.has(key)) {
+        syncTombstones.push({ kind, id, deletedAt: ts });
+        existing.add(key);
+      }
+    });
+    chrome.storage.local.set({ [tombstoneStorageKey()]: syncTombstones });
+  }
+  async function pushCloudData() {
     if (!currentUser) return;
+    if (!premiumActive()) return;
     saveUserData(currentUser.id, {
       folders,
       bookmarks,
       folderIdCounter,
-      premiumData: infoldersPremium
+      premiumData: infoldersPremium,
+      tombstones: syncTombstones
     }).catch((err) => {
       const msg = typeof err === "object" && err !== null ? err.message || "riprova pi\xF9 tardi" : String(err);
       showToast("Errore sync cloud: " + msg, "error", 4e3);
     });
   }
   function loginWithGoogle() {
+    if (!requireExtensionContext()) return;
     chrome.runtime.sendMessage({ action: "loginWithGoogle" }, (response) => {
       if (chrome.runtime.lastError) {
         showToast("Errore login: " + chrome.runtime.lastError.message, "error");
@@ -24113,36 +24715,53 @@ ${suffix}`;
       }
     });
   }
-  function fetchUserInfo(token) {
-    fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
-      headers: { Authorization: `Bearer ${token}` }
-    }).then((r) => r.json()).then(async (user) => {
-      currentUser = {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        picture: user.picture,
-        verified_email: user.verified_email
-      };
-      chrome.storage.local.set({ currentUser });
-      try {
-        await signInWithGoogleToken(token);
-      } catch (e) {
-        console.error("Auth Supabase fallito:", e);
-      }
-      syncToSupabase();
-      syncPremiumStatusFromSupabase();
-      _reopeningSidebar = true;
-      closeSidebar();
-      setTimeout(() => {
-        _reopeningSidebar = false;
-        openSidebar();
-      }, 300);
-    }).catch(() => showToast("Errore recupero info utente", "error"));
-  }
+   async function fetchUserInfo(idToken) {
+     try {
+       const payload = JSON.parse(atob(idToken.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+       currentUser = {
+         id: payload.sub,
+         email: payload.email,
+         name: payload.name,
+         picture: payload.picture,
+         verified_email: payload.email_verified
+       };
+       chrome.storage.local.set({ currentUser });
+       updateInPageButtonsAuth();
+       try {
+         const tombKey = `infolders_tombstones_${payload.sub}`;
+         const tombRes = await chrome.storage.local.get([tombKey]);
+         syncTombstones = Array.isArray(tombRes && tombRes[tombKey]) ? tombRes[tombKey] : [];
+       } catch (e) {
+         syncTombstones = [];
+       }
+       try {
+         const data = await signInWithGoogleToken(idToken, payload.sub);
+         if (data && data.session) {
+           await chrome.storage.local.set({ supabase_session: data.session });
+         }
+       } catch (e) {
+         const msg = typeof e === "object" && e !== null ? e.message || "riprova" : String(e);
+         console.error("Auth Supabase fallito:", e);
+         showToast("Accesso Google ok, ma sync cloud non disponibile: " + msg, "warning", 5e3);
+       }
+       await syncPremiumStatusFromSupabase();
+       await syncFromCloud();
+       _reopeningSidebar = true;
+       closeSidebar();
+       setTimeout(() => {
+         _reopeningSidebar = false;
+         openSidebar();
+       }, 300);
+     } catch (e) {
+       showToast("Errore recupero info utente", "error");
+     }
+   }
   function logout() {
+    if (!requireExtensionContext()) return;
     chrome.runtime.sendMessage({ action: "logout" }, () => {
       currentUser = null;
+      syncTombstones = [];
+      updateInPageButtonsAuth();
       chrome.storage.local.remove(["currentUser"]);
       _reopeningSidebar = true;
       closeSidebar();
@@ -24218,10 +24837,10 @@ ${suffix}`;
       return `<div class="pricing-card" style="background: ${cardBg}; border: ${borderStyle}; border-radius: 14px; padding: 20px; text-align: left; position: relative; box-shadow: ${cardShadow};">${badgeHtml}<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;"><h3 style="color: ${theme.textPrimary}; margin: 0; font-size: 17px; font-weight: 700;">${plan.name}</h3><div style="font-size: 20px; font-weight: 600; color: #fff;"><span style="font-size:28px;color:#fff;">${plan.price.replace("\u20AC", "")}</span>\u20AC<span style="font-size:12px;color:#fff;font-weight:400;">/${plan.priceNote}</span></div></div><ul style="list-style: none; padding: 0; margin: 0 0 18px 0; font-size: 13px; line-height: 1.8; display:flex; flex-direction:column; gap:6px;">${featuresListHtml}</ul><button class="pricing-btn" data-plan="${plan.id}" style="${btnStyle}">${btnLabel}</button></div>`;
     }).join("");
     popup.innerHTML = `
-    <div style="padding: 32px 32px 16px; flex-shrink: 0;">
-      <div style="width:56px;height:56px;border-radius:16px;background:${theme.appAccent}22;border:1px solid ${theme.appAccent}44;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;color:${theme.appAccent};">${lucide_icons_default.get("crown", 28)}</div>
-      <h2 style="color: white; margin: 0 0 4px; font-size: 22px; font-weight:700;">InFolders <span style="color:${theme.appAccent};">Premium</span></h2>
-      <p style="color: ${theme.textSecondary}; margin: 0; font-size: 14px;">Scegli il piano perfetto per te</p>
+    <div style="padding: 18px 24px 12px; flex-shrink: 0;">
+      <div style="width:40px;height:40px;border-radius:12px;background:${theme.appAccent}22;border:1px solid ${theme.appAccent}44;display:flex;align-items:center;justify-content:center;margin:0 auto 8px;color:${theme.appAccent};">${lucide_icons_default.get("crown", 20)}</div>
+      <h2 style="color: white; margin: 0 0 2px; font-size: 18px; font-weight:700;">InFolders <span style="color:${theme.appAccent};">Premium</span></h2>
+      <p style="color: ${theme.textSecondary}; margin: 0; font-size: 13px;">Scegli il piano perfetto per te</p>
     </div>
     <div id="infolders-premium-scroll-body" style="overflow-y: auto; padding: 0 32px 32px; flex: 1; display: flex; flex-direction: column; gap: 20px; color: white;">
       ${plansCardsHtml}
@@ -24358,22 +24977,43 @@ ${suffix}`;
     inSidebar: (a) => a.closest("aside") || a.closest("nav") || a.closest('[class*="sidebar" i]') || a.closest('[class*="SideNav" i]')
   };
   var BOOKMARK_GEMINI_SPEC = {
-    anchorSelectors: ['aside a[href*="/app/"]', 'nav a[href*="/app/"]', 'div[role="navigation"] a[href*="/app/"]', 'a[href*="gemini.google.com/app/"]'],
+    anchorSelectors: ['aside a[href*="/app/"]', 'nav a[href*="/app/"]', 'div[role="navigation"] a[href*="/app/"]', 'bard-sidenav a[href*="/app/"]', 'mat-nav-list a[href*="/app/"]', 'a[href*="/app/"]', 'a[href*="gemini.google.com/app/"]'],
     hrefTest: (href) => {
       try {
         const u = new URL(href, location.href);
-        return u.hostname.includes("gemini.google") && /\/app\//.test(u.pathname);
+        return u.hostname.includes("gemini.google") && isGeminiConversationPath(u.pathname);
       } catch {
         return false;
       }
     },
-    inSidebar: (a) => a.closest("aside") || a.closest("nav") || a.closest('div[role="navigation"]') || a.closest('[class*="sidenav" i]') || a.closest('[class*="side-nav" i]') || a.closest('[role="complementary"]')
+    inSidebar: (a) => a.closest("mat-nav-list") || a.closest("bard-sidenav") || a.closest("aside") || a.closest("nav") || a.closest('div[role="navigation"]') || a.closest('[class*="sidenav" i]') || a.closest('[class*="side-nav" i]') || a.closest('[role="complementary"]'),
+    // Su Gemini la riga della chat È l'anchor stessa (a.mat-mdc-list-item): il pulsante
+    // bookmark va appeso in fondo all'anchor (lato destro), non davanti.
+    anchorIsRow: true
+  };
+  var BOOKMARK_PERPLEXITY_SPEC = {
+    anchorSelectors: ['aside a[href*="/search/"], aside a[href*="/thread/"], aside a[href*="/library/"]', 'nav a[href*="/search/"], nav a[href*="/thread/"], nav a[href*="/library/"]', '[class*="library" i] a[href*="/search/"], [class*="library" i] a[href*="/thread/"], [class*="library" i] a[href*="/library/"]', '[class*="sidebar" i] a[href*="/search/"], [class*="sidebar" i] a[href*="/thread/"], [class*="sidebar" i] a[href*="/library/"]'],
+    hrefTest: (href) => {
+      try {
+        const u = new URL(href, location.href);
+        const host = u.hostname || "";
+        return (host === "perplexity.ai" || host.endsWith(".perplexity.ai")) && /^\/(search|thread|library)\/[^/?#]+/.test(u.pathname);
+      } catch {
+        return false;
+      }
+    },
+    inSidebar: (a) => a.closest("aside") || a.closest("nav") || a.closest('[class*="library" i]') || a.closest('[class*="sidebar" i]') || a.closest('[role="complementary"]'),
+    // Le righe chat di Perplexity sono anchor dentro la sidebar sinistra: niente pulsanti
+    // "fissa"/overflow come ChatGPT, quindi il bookmark va appeso in fondo all'anchor.
+    anchorIsRow: true
   };
   var BOOKMARK_HOST_SPECS = {
     "chatgpt.com": BOOKMARK_CHATGPT_SPEC,
     "chat.openai.com": BOOKMARK_CHATGPT_SPEC,
     "claude.ai": BOOKMARK_CLAUDE_SPEC,
-    "gemini.google.com": BOOKMARK_GEMINI_SPEC
+    "gemini.google.com": BOOKMARK_GEMINI_SPEC,
+    "perplexity.ai": BOOKMARK_PERPLEXITY_SPEC,
+    "www.perplexity.ai": BOOKMARK_PERPLEXITY_SPEC
   };
   function collectBookmarkAnchors(selectors) {
     const seen = /* @__PURE__ */ new Set();
@@ -24392,10 +25032,11 @@ ${suffix}`;
     return out;
   }
   function findChatRow(anchor) {
-    const sidebar = (() => {
-      const spec = BOOKMARK_HOST_SPECS[window.location.hostname];
-      return spec?.inSidebar(anchor) || null;
-    })();
+    const spec = BOOKMARK_HOST_SPECS[window.location.hostname];
+    // Gemini/Perplexity: la riga È l'anchor stessa (niente wrapper li/article con
+    // pulsanti "fissa"/overflow come ChatGPT/Claude) — il bookmark va appeso dentro.
+    if (spec?.anchorIsRow) return anchor;
+    const sidebar = spec?.inSidebar(anchor) || null;
     if (!sidebar) return null;
     let el = anchor;
     for (let i = 0; i < 5; i++) {
@@ -24415,6 +25056,7 @@ ${suffix}`;
   var _bookmarkBtnTimer = null;
   function injectBookmarkButtons() {
     try {
+      if (!isChatUrl()) return;
       const config = getPlatformConfig();
       if (!config) return;
       const spec = BOOKMARK_HOST_SPECS[window.location.hostname];
@@ -24428,16 +25070,6 @@ ${suffix}`;
         row.classList.add("infolders-chat-row");
         const wrap = document.createElement("span");
         wrap.className = "infolders-bookmark-wrap";
-        Object.assign(wrap.style, {
-          opacity: "0",
-          pointerEvents: "none",
-          transition: "opacity 0.2s ease, transform 0.2s ease",
-          display: "inline-flex",
-          alignItems: "center",
-          flexShrink: "0",
-          marginRight: "8px",
-          transform: "scale(0.85)"
-        });
         const btn = document.createElement("button");
         btn.type = "button";
         btn.title = "Aggiungi a Bookmarks";
@@ -24484,7 +25116,27 @@ ${suffix}`;
           }, 1500);
         });
         wrap.appendChild(btn);
-        row.insertBefore(wrap, anchor);
+        // Posizionamento condiviso per tutti gli host (ChatGPT, Claude, Gemini): il bookmark va tra il bottone "fissa" e i tre puntini.
+        var pinBtn = row.querySelector('button[aria-label*="pin" i], button[aria-label*="fissa" i], button[title*="pin" i], button[title*="fissa" i], button[data-testid*="pin" i]');
+        var overflowBtn = row.querySelector('button[aria-haspopup="menu"], button[aria-haspopup="true"], button[aria-haspopup], button[aria-label*="more" i], button[aria-label*="options" i], button[aria-label*="menu" i], button[aria-label*="altro" i], button[title*="more" i], button[title*="options" i], button[title*="altro" i], button[data-testid*="menu" i], button[data-testid*="overflow" i], [role="button"][aria-haspopup="menu"]');
+        var host = overflowBtn?.parentElement || pinBtn?.parentElement;
+        if (host) {
+          if (overflowBtn) {
+            overflowBtn.parentElement.insertBefore(wrap, overflowBtn);
+          } else {
+            var refNode = pinBtn.nextElementSibling;
+            if (refNode) pinBtn.parentElement.insertBefore(wrap, refNode);
+            else pinBtn.parentElement.appendChild(wrap);
+          }
+        } else if (spec.anchorIsRow) {
+          // Gemini/Perplexity: niente pulsanti pin/overflow — appendi il bookmark in
+          // fondo alla riga (lato destro, allineato al testo), non davanti all'anchor.
+          wrap.style.marginLeft = "auto";
+          wrap.style.marginRight = "0";
+          anchor.appendChild(wrap);
+        } else {
+          row.insertBefore(wrap, anchor);
+        }
       });
     } catch (e) {
       console.warn("InFolders injectBookmarkButtons:", e);
@@ -24494,6 +25146,7 @@ ${suffix}`;
     if (ns === "local") {
       if (changes.currentUser) {
         currentUser = changes.currentUser.newValue;
+        updateInPageButtonsAuth();
         if (isSidebarOpen) {
           rebuildTabBar();
           switchTab("account");
@@ -24541,6 +25194,7 @@ ${suffix}`;
   }
   function injectInPageFoldersSection() {
     try {
+      if (!isChatUrl()) return;
       const config = getPlatformConfig();
       if (!config) return;
       const spec = BOOKMARK_HOST_SPECS[window.location.hostname];
@@ -24550,16 +25204,36 @@ ${suffix}`;
       }
       let targetContainer = null;
       let referenceElement = null;
-      const anchors = collectBookmarkAnchors(spec.anchorSelectors);
+      // Filtra con hrefTest: così su Gemini il bottone "Nuova chat" (href /app) o altri
+      // link non-chat non diventano il riferimento per il posizionamento.
+      const anchors = collectBookmarkAnchors(spec.anchorSelectors).filter((a) => {
+        try {
+          return spec.hrefTest(a.href || "");
+        } catch {
+          return false;
+        }
+      });
       if (anchors.length > 0) {
-        const row = spec.inSidebar(anchors[0])?.closest("li, div");
+        // La riga è il contenitore più vicino dell'anchor (non la sidebar intera):
+        // partendo da spec.inSidebar() si risaliva fino al wrapper esterno e la
+        // sezione finiva fuori dalla sidebar. Se il risultato avvolge l'intera
+        // sidebar, si ripiega sul parent diretto dell'anchor.
+        const sidebarEl = spec.inSidebar(anchors[0]);
+        let row = anchors[0].closest("li, div") || anchors[0].parentElement;
+        if (row && sidebarEl && row.contains(sidebarEl)) {
+          row = anchors[0].parentElement;
+        }
         if (row && row.parentElement) {
           targetContainer = row.parentElement;
           referenceElement = row;
         }
       }
       if (!targetContainer) {
-        targetContainer = document.querySelector("nav") || document.querySelector("aside") || document.querySelector('[role="navigation"]');
+        // Fallback senza righe chat: escludi i nav minuscoli (es. la barra di
+        // ridimensionamento di ChatGPT) e preferisci la sidebar con più link.
+        const candidates = [...document.querySelectorAll("nav, aside, [role=navigation]")].filter((el) => el.offsetWidth > 100);
+        candidates.sort((a, b) => b.querySelectorAll("a").length - a.querySelectorAll("a").length);
+        targetContainer = candidates[0] || document.querySelector("nav") || document.querySelector("aside") || document.querySelector('[role="navigation"]');
       }
       if (!targetContainer) return;
       const theme = config.theme;
@@ -24574,52 +25248,18 @@ ${suffix}`;
         gap: "10px",
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
       });
-      const header = document.createElement("div");
-      Object.assign(header.style, {
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center"
-      });
-      const title = document.createElement("span");
-      title.textContent = "Folders";
-      Object.assign(title.style, {
-        color: theme.textPrimary || "#ffffff",
-        fontSize: "13px",
-        fontWeight: "600",
-        letterSpacing: "0.3px"
-      });
-      const addBtn = document.createElement("button");
-      addBtn.type = "button";
-      addBtn.title = "Nuova cartella";
-      addBtn.innerHTML = lucide_icons_default.get("plus", 14);
-      Object.assign(addBtn.style, {
-        background: "transparent",
-        border: "none",
-        color: theme.appAccent || "#a855f7",
-        cursor: "pointer",
-        padding: "4px",
+      const inlineRow = document.createElement("div");
+      Object.assign(inlineRow.style, {
         display: "flex",
         alignItems: "center",
-        borderRadius: "4px",
-        transition: "background 0.2s ease"
+        gap: "6px",
+        width: "100%"
       });
-      addBtn.addEventListener("mouseenter", () => {
-        addBtn.style.background = theme.surfaceHover || "rgba(255,255,255,0.08)";
-      });
-      addBtn.addEventListener("mouseleave", () => {
-        addBtn.style.background = "transparent";
-      });
-      addBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        addRootFolderFromSidebar();
-      });
-      header.appendChild(title);
-      header.appendChild(addBtn);
-      section.appendChild(header);
       const searchWrapper = document.createElement("div");
       Object.assign(searchWrapper.style, {
         position: "relative",
-        width: "100%"
+        flex: "1",
+        minWidth: "0"
       });
       const searchIcon = document.createElement("span");
       searchIcon.innerHTML = lucide_icons_default.get("search", 12);
@@ -24658,7 +25298,39 @@ ${suffix}`;
       });
       searchWrapper.appendChild(searchIcon);
       searchWrapper.appendChild(searchInput);
-      section.appendChild(searchWrapper);
+      const addBtn = document.createElement("button");
+      addBtn.type = "button";
+      addBtn.title = "Nuova cartella";
+      addBtn.innerHTML = lucide_icons_default.get("plus", 15);
+      Object.assign(addBtn.style, {
+        background: theme.glassBg || "rgba(0,0,0,0.2)",
+        border: `1px solid ${theme.border}44`,
+        color: theme.appAccent || "#a855f7",
+        cursor: "pointer",
+        width: "32px",
+        height: "32px",
+        flexShrink: "0",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        borderRadius: "8px",
+        transition: "background 0.2s ease, border-color 0.2s ease"
+      });
+      addBtn.addEventListener("mouseenter", () => {
+        addBtn.style.background = theme.surfaceHover || "rgba(255,255,255,0.08)";
+        addBtn.style.borderColor = theme.appAccent;
+      });
+      addBtn.addEventListener("mouseleave", () => {
+        addBtn.style.background = theme.glassBg || "rgba(0,0,0,0.2)";
+        addBtn.style.borderColor = `${theme.border}44`;
+      });
+      addBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        addRootFolderFromSidebar();
+      });
+      inlineRow.appendChild(searchWrapper);
+      inlineRow.appendChild(addBtn);
+      section.appendChild(inlineRow);
       const foldersList = document.createElement("div");
       foldersList.id = "infolders-inpage-folders-list";
       Object.assign(foldersList.style, {
@@ -24670,11 +25342,20 @@ ${suffix}`;
         paddingRight: "4px"
       });
       section.appendChild(foldersList);
-      if (referenceElement) {
-        targetContainer.insertBefore(section, referenceElement);
-      } else {
-        targetContainer.insertBefore(section, targetContainer.firstChild);
+      let insertBeforeNode = referenceElement || targetContainer.firstChild;
+      if (referenceElement && referenceElement.parentElement) {
+        const siblings = Array.from(referenceElement.parentElement.children);
+        const idx = siblings.indexOf(referenceElement);
+        for (let i = 0; i < idx; i++) {
+          const s = siblings[i];
+          const txt = (s.textContent || "").trim();
+          if (s.children.length <= 1 && /^(recenti|recent|recents|chat recenti|recent chats|storico|history|sessioni|sessions|chat)$/i.test(txt)) {
+            insertBeforeNode = s;
+            break;
+          }
+        }
       }
+      targetContainer.insertBefore(section, insertBeforeNode);
       renderInPageFoldersList("");
     } catch (err) {
       console.warn("InFolders injectInPageFoldersSection error:", err);
@@ -24686,6 +25367,8 @@ ${suffix}`;
     if (_observerTimer) clearTimeout(_observerTimer);
     _observerTimer = setTimeout(() => {
       _observerTimer = null;
+      syncUiWithPage();
+      if (!isChatUrl()) return;
       injectBookmarkButtons();
       injectInPageFoldersSection();
     }, 150);
@@ -24702,13 +25385,15 @@ ${suffix}`;
     if (_scrollTimer) clearTimeout(_scrollTimer);
     _scrollTimer = setTimeout(() => {
       _scrollTimer = null;
+      if (!isChatUrl()) return;
       injectBookmarkButtons();
     }, 300);
   }, { passive: true, capture: true });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible" && currentUser) {
       syncPremiumStatusFromSupabase();
-      injectBookmarkButtons();
+      queueCloudSync(500);
+      if (isChatUrl()) injectBookmarkButtons();
     }
   });
 })();

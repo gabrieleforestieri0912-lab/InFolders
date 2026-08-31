@@ -77,16 +77,16 @@ export default function TermsPage() {
           </p>
           <ul className="ml-4 list-disc space-y-1">
             <li><span className="text-white font-medium">Free</span> — Gratuito, include cartelle di base, bookmark illimitati e fino a 50 chat nelle cartelle.</li>
-            <li><span className="text-white font-medium">Pro</span> — €9,99 una tantum. Sblocca chat illimitate, sincronizzazione cloud multi-dispositivo, libreria prompt e profili istruzioni personalizzati. Accesso a vita senza abbonamenti ricorrenti.</li>
-            <li><span className="text-white font-medium">Team</span> — €29,99/utente/anno. Include tutte le funzionalità Pro, condivisione del team e supporto prioritario dedicato.</li>
+            <li><span className="text-white font-medium">Pro</span> — €9,99/mese. Sblocca chat illimitate, sincronizzazione cloud multi-dispositivo, libreria prompt e profili istruzioni personalizzati. Abbonamento mensile con rinnovo automatico, disdici in qualsiasi momento.</li>
+            <li><span className="text-white font-medium">Team</span> — €29,99/mese. Include tutte le funzionalità Pro, condivisione del team e supporto prioritario dedicato.</li>
           </ul>
           <p>
             I pagamenti sono elaborati tramite Stripe in modo sicuro. InFolders non raccoglie né memorizza dati
             delle carte di credito sui propri server. Le transazioni sono soggette ai Termini di Servizio di Stripe.
           </p>
           <p>
-            Il piano Pro prevede un pagamento una tantum. Non esistono rinnovi automatici. La fattura viene emessa
-            al momento dell&apos;acquisto.
+            Il piano Pro è un abbonamento mensile con rinnovo automatico elaborato tramite Stripe. Puoi disdire in
+            qualsiasi momento: l&apos;accesso alle funzionalità Pro resta attivo fino alla fine del periodo già pagato.
           </p>
         </Section>
 

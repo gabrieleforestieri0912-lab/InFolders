@@ -1,6 +1,7 @@
 import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY!);
+const RESEND_FROM = process.env.RESEND_FROM_EMAIL || 'InFolders <onboarding@resend.dev>';
 
 export async function sendContactEmail(data: {
   name: string;
@@ -9,7 +10,7 @@ export async function sendContactEmail(data: {
   plan?: string;
 }) {
   return resend.emails.send({
-    from: 'InFolders <onboarding@resend.dev>',
+    from: RESEND_FROM,
     to: process.env.CONTACT_EMAIL!,
     subject: `Richiesta contatto Team - ${data.name}`,
     html: `
@@ -29,7 +30,7 @@ export async function sendPremiumWelcomeEmail(data: {
   plan: string;
 }) {
   return resend.emails.send({
-    from: 'InFolders <onboarding@resend.dev>',
+    from: RESEND_FROM,
     to: data.email,
     subject: `Benvenuto su InFolders ${data.plan === 'pro' ? 'Pro' : 'Team'}!`,
     html: `
@@ -50,7 +51,7 @@ export async function sendFeedbackEmail(data: {
 }) {
   const stars = '★'.repeat(data.rating) + '☆'.repeat(5 - data.rating);
   return resend.emails.send({
-    from: 'InFolders <onboarding@resend.dev>',
+    from: RESEND_FROM,
     to: process.env.CONTACT_EMAIL!,
     subject: `[Feedback] ${data.type} — ${stars}`,
     html: `
