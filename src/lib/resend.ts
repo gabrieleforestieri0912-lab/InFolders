@@ -1,6 +1,13 @@
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY!);
+function getResend(): Resend {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    throw new Error('RESEND_API_KEY non configurata');
+  }
+  return new Resend(apiKey);
+}
+
 const RESEND_FROM = process.env.RESEND_FROM_EMAIL || 'InFolders <onboarding@resend.dev>';
 
 export async function sendContactEmail(data: {
@@ -9,7 +16,7 @@ export async function sendContactEmail(data: {
   message: string;
   plan?: string;
 }) {
-  return resend.emails.send({
+  return getResend().emails.send({
     from: RESEND_FROM,
     to: process.env.CONTACT_EMAIL!,
     subject: `Richiesta contatto Team - ${data.name}`,
@@ -29,7 +36,7 @@ export async function sendPremiumWelcomeEmail(data: {
   name: string;
   plan: string;
 }) {
-  return resend.emails.send({
+  return getResend().emails.send({
     from: RESEND_FROM,
     to: data.email,
     subject: `Benvenuto su InFolders ${data.plan === 'pro' ? 'Pro' : 'Team'}!`,
@@ -50,7 +57,7 @@ export async function sendFeedbackEmail(data: {
   email?: string;
 }) {
   const stars = '★'.repeat(data.rating) + '☆'.repeat(5 - data.rating);
-  return resend.emails.send({
+  return getResend().emails.send({
     from: RESEND_FROM,
     to: process.env.CONTACT_EMAIL!,
     subject: `[Feedback] ${data.type} — ${stars}`,

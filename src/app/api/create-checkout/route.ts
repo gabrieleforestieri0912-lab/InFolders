@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 
-const stripe = new (require('stripe'))(process.env.STRIPE_SECRET_KEY!);
+function getStripe() {
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  if (!secretKey) {
+    throw new Error('STRIPE_SECRET_KEY non configurata');
+  }
+  return new (require('stripe'))(secretKey);
+}
 
 export async function POST(req: Request) {
   try {
@@ -10,6 +16,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Parametri mancanti' }, { status: 400 });
     }
 
+    const stripe = getStripe();
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
 
     const plans: Record<string, { name: string; amount: number }> = {

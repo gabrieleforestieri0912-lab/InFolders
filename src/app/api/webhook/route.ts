@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server';
 import { sendPremiumWelcomeEmail } from '@/lib/resend';
 
-const stripe = new (require('stripe'))(process.env.STRIPE_SECRET_KEY!);
+function getStripe() {
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  if (!secretKey) {
+    throw new Error('STRIPE_SECRET_KEY non configurata');
+  }
+  return new (require('stripe'))(secretKey);
+}
 
 async function getSupabaseAdmin() {
   const { createClient } = await import('@supabase/supabase-js');
@@ -159,11 +165,15 @@ export async function POST(req: Request) {
   try {
     const body = await req.text();
     const signature = req.headers.get('stripe-signature') || '';
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    if (!webhookSecret) {
+      throw new Error('STRIPE_WEBHOOK_SECRET non configurata');
+    }
 
-    const event = stripe.webhooks.constructEvent(
+    const event = getStripe().webhooks.constructEvent(
       body,
       signature,
-      process.env.STRIPE_WEBHOOK_SECRET!
+      webhookSecret
     );
 
     switch (event.type) {
