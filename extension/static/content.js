@@ -22378,6 +22378,23 @@ ${suffix}`;
       overlay.style.opacity = "1";
       sidebar.style.transform = "translateX(0)";
     });
+    maybeAutoStartOnboarding();
+  }
+  function maybeAutoStartOnboarding() {
+    if (currentUser) return;
+    if (isSidebarOpen === false) return;
+    chrome.storage.local.get(["infolders_tour_seen"], (res) => {
+      if (res && res.infolders_tour_seen) return;
+      setTimeout(() => {
+        if (!document.getElementById("infolders-tour-overlay") && isSidebarOpen) {
+          chrome.storage.local.set({ infolders_tour_seen: true });
+          try {
+            startGuidedTour();
+          } catch (e) {
+          }
+        }
+      }, 700);
+    });
   }
   var _reopeningSidebar = false;
   function closeSidebar() {
@@ -22394,6 +22411,31 @@ ${suffix}`;
       isSidebarOpen = false;
       if (!_reopeningSidebar) showInPageButtons();
     }, 350);
+  }
+  function closeActiveModal() {
+    const m = document.querySelector("#infolders-sidebar .infolders-modal, #infolders-sidebar [class*=modal]");
+    if (m) { if (typeof m._infoldersClose === "function") m._infoldersClose(); return true; }
+    const tourOverlay = document.getElementById("infolders-tour-overlay");
+    if (tourOverlay) { return true; }
+    return false;
+  }
+  if (!window.__infoldersKeyHandlerAttached) {
+    window.__infoldersKeyHandlerAttached = true;
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        closeActiveModal();
+        if (document.getElementById("infolders-tour-overlay")) {
+          const skip = document.getElementById("tour-skip");
+          if (skip) skip.click();
+          e.preventDefault();
+          return;
+        }
+        if (isSidebarOpen) {
+          closeSidebar();
+          e.preventDefault();
+        }
+      }
+    }, true);
   }
   function rebuildTabBar() {
     const tabsContainer = document.querySelector("[data-tab-bar]");
@@ -22516,14 +22558,22 @@ ${suffix}`;
     const theme = currentTheme;
     if (!currentUser) {
       container.innerHTML = `
-      <div style="display:flex;flex-direction:column;align-items:center;padding:40px 16px 24px;text-align:center;">
-        <div style="display:flex;align-items:center;justify-content:center;margin:0 auto 20px;color:${theme.appAccent};">${lucide_icons_default.get("user", 48)}</div>
+      <div style="display:flex;flex-direction:column;align-items:center;padding:36px 16px 24px;text-align:center;">
+        <div style="display:flex;align-items:center;justify-content:center;margin:0 auto 16px;color:${theme.appAccent};">${lucide_icons_default.get("user", 44)}</div>
         <h3 style="margin:0 0 6px;font-size:17px;font-weight:700;color:${theme.textPrimary};letter-spacing:-0.3px;">Benvenuto in InFolders</h3>
-        <p style="margin:0 0 28px;color:${theme.textSecondary};font-size:13px;line-height:1.5;max-width:220px;">${t("auth.login.title")}</p>
-        <button id="sidebar-login-btn" style="background:${theme.appAccent};border:none;color:white;padding:12px 28px;border-radius:12px;cursor:pointer;font-size:14px;font-weight:700;transition:all 0.2s ease;letter-spacing:0.2px;box-shadow:0 4px 20px ${theme.appAccent}44;width:100%;max-width:220px;">${t("auth.login.button")}</button>
+        <p style="margin:0 0 20px;color:${theme.textSecondary};font-size:13px;line-height:1.5;max-width:230px;">${t("auth.login.title")}</p>
+        <div style="width:100%;max-width:250px;text-align:left;display:flex;flex-direction:column;gap:9px;margin-bottom:24px;">
+          <div style="display:flex;align-items:center;gap:9px;font-size:12px;color:${theme.textSecondary};"><span style="color:${theme.appAccent};display:flex;flex-shrink:0;">${lucide_icons_default.get("check", 14)}</span> Sincronizza cartelle e bookmark sul cloud</div>
+          <div style="display:flex;align-items:center;gap:9px;font-size:12px;color:${theme.textSecondary};"><span style="color:${theme.appAccent};display:flex;flex-shrink:0;">${lucide_icons_default.get("folder", 14)}</span> Cartelle, bookmark e prompt illimitati</div>
+          <div style="display:flex;align-items:center;gap:9px;font-size:12px;color:${theme.textSecondary};"><span style="color:${theme.appAccent};display:flex;flex-shrink:0;">${lucide_icons_default.get("shield", 14)}</span> I tuoi dati sono al sicuro e privati</div>
+        </div>
+        <button id="sidebar-login-btn" style="background:${theme.appAccent};border:none;color:white;padding:12px 28px;border-radius:12px;cursor:pointer;font-size:14px;font-weight:700;transition:all 0.2s ease;letter-spacing:0.2px;box-shadow:0 4px 20px ${theme.appAccent}44;width:100%;max-width:250px;">${t("auth.login.button")}</button>
+        <button id="sidebar-tour-btn" style="background:transparent;border:none;color:${theme.textSecondary};cursor:pointer;font-size:12px;margin-top:12px;text-decoration:underline;text-underline-offset:3px;opacity:0.7;transition:opacity 0.2s ease;">${lucide_icons_default.get("info", 12)} Scopri InFolders con una guida</button>
       </div>
     `;
       container.querySelector("#sidebar-login-btn").addEventListener("click", loginWithGoogle);
+      const tourBtn = container.querySelector("#sidebar-tour-btn");
+      if (tourBtn) tourBtn.addEventListener("click", startGuidedTour);
     } else {
       const premiumBadge = premiumActive() ? `<span style="background:${theme.appAccent}22;color:${theme.appAccent};border:1px solid ${theme.appAccent}44;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;">Premium</span>` : `<span style="background:rgba(255,255,255,0.06);color:${theme.textSecondary};border:1px solid rgba(255,255,255,0.08);padding:3px 10px;border-radius:20px;font-size:10px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;">Free</span>`;
       container.innerHTML = `
@@ -22609,6 +22659,20 @@ ${suffix}`;
     const tree = q ? filterFolderTreeByQuery(folders, q) : folders;
     if (tree.length === 0 && q) {
       list.innerHTML = `<div style="text-align:center;padding:32px 16px;"><span style="color:${currentTheme.textSecondary};font-size:13px;">Nessun risultato per "${escapeHtml(q)}"</span></div>`;
+      return;
+    }
+    if (tree.length === 0) {
+      list.innerHTML = `
+        <div style="text-align:center;padding:36px 20px;display:flex;flex-direction:column;align-items:center;gap:14px;">
+          <span style="width:56px;height:56px;border-radius:18px;background:${currentTheme.appAccent}12;display:flex;align-items:center;justify-content:center;color:${currentTheme.appAccent};opacity:0.85;">${lucide_icons_default.get("folder-plus", 26)}</span>
+          <div>
+            <p style="color:${currentTheme.textPrimary};font-size:13px;font-weight:600;margin:0 0 4px;">Ancora nessuna cartella</p>
+            <p style="color:${currentTheme.textSecondary};font-size:12px;line-height:1.5;margin:0;max-width:220px;">Crea la tua prima cartella per iniziare a organizzare le conversazioni AI.</p>
+          </div>
+          <button id="sidebar-add-folder-cta" style="background:${currentTheme.appAccent};border:none;color:white;padding:9px 18px;border-radius:10px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;transition:all 0.2s ease;box-shadow:0 4px 16px ${currentTheme.appAccent}44;">${lucide_icons_default.get("plus", 13)} Crea cartella</button>
+        </div>`;
+      const cta = list.querySelector("#sidebar-add-folder-cta");
+      if (cta) cta.addEventListener("click", addRootFolderFromSidebar);
       return;
     }
     tree.forEach((folder) => {
